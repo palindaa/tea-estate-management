@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    {% include "components/head.html" %}
+</head>
+<body class="min-h-full bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto">
+        {% include "header.html" %}
+        
+        <div class="max-w-4xl mx-auto mt-8 p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    Tea Leaves Dashboard - {{ "%04d-%02d"|format(selected_year, selected_month) }}
+                </h2>
+                <form method="get" class="flex gap-2">
+                    <select name="year" class="rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1">
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="month" class="rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1">
+                        {% for m in range(1,13) %}
+                        <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                        Filter
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Tea Leaves Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-2">
+                            Monthly Tea Leaves Total
+                        </h3>
+                        <p class="text-3xl font-bold text-green-600">
+                            {{ "%.2f"|format(monthly_total) }} kg
+                        </p>
+                    </div>
+                    <div class="bg-green-100 dark:bg-green-700 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-green-600 dark:text-green-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

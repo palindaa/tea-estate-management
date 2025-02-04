@@ -1,0 +1,38 @@
+<div x-data="{ open: false }" class="flex justify-between items-center px-6 py-4 relative">
+    <!-- Updated logo section -->
+    <div class="flex items-center space-x-3">
+        <div class="bg-green-600 rounded-full w-8 h-8 flex items-center justify-center">
+            <span class="text-white text-lg">🍵</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+            Tea
+            <span class="text-green-600 text-sm ml-2">Factory Management</span>
+        </h1>
+    </div>
+    
+    <nav class="hidden md:flex space-x-8">
+        <a href="/dashboard" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Dashboard</a>
+        <a href="/users" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
+        <a href="/add-work" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Add Work</a>
+        <a href="/tea-leaves" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Leaves Report</a>
+        <a href="/other-work" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Other Work</a>
+    </nav>
+
+    <!-- Mobile menu button -->
+    <button @click="open = !open" class="md:hidden">
+        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+    </button>
+
+    <!-- Mobile menu -->
+    <div x-show="open" class="md:hidden absolute top-16 right-0 w-full bg-white dark:bg-gray-800 shadow-lg">
+        <div class="px-2 pt-2 pb-3 space-y-1">
+            <a href="/dashboard" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Dashboard</a>
+            <a href="/users" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
+            <a href="/add-work" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Add Work</a>
+            <a href="/tea-leaves" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Leaves Report</a>
+            <a href="/other-work" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Other Work</a>
+        </div>
+    </div>
+</div> 
