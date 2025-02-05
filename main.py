@@ -10,9 +10,10 @@ import uvicorn
 from typing import Optional
 from fastapi import HTTPException
 from datetime import datetime, date
+from sqlalchemy.exc import IntegrityError
 
 # Database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./users.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 Base = declarative_base()
 
@@ -31,11 +32,27 @@ class Work(Base):
     other_cost = Column(Float, nullable=True)
     other_location = Column(String, nullable=True)
     advance_amount = Column(Float, nullable=True)
+    adjusted_tea_weight = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     work_date = Column(Date, nullable=False, server_default=func.current_date())
 
     def __repr__(self):
         return f"<Work(id={self.id}, user_id={self.user_id}, date={self.work_date})>"
+
+class Factory(Base):
+    __tablename__ = "factories"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+class FactoryTea(Base):
+    __tablename__ = "factory_tea"
+    id = Column(Integer, primary_key=True, index=True)
+    factory_id = Column(Integer, ForeignKey("factories.id"), nullable=False)
+    weight_type = Column(String, nullable=False)
+    leaves_weight = Column(Float, nullable=False)
+    factory_date = Column(Date, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
 
 Base.metadata.create_all(bind=engine)
 
@@ -103,7 +120,8 @@ async def add_work_page(
         "works": works,
         "current_page": page,
         "total_pages": (total + limit - 1) // limit,
-        "limit": limit
+        "limit": limit,
+        "factories": db.query(Factory).all()
     })
 
 @app.post("/add-work")
@@ -139,6 +157,20 @@ async def create_work(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format")
 
+    # Only calculate adjusted tea weight if tea weight is provided
+    adjusted_tea = None
+    if tea_weight_float is not None:
+        if tea_weight_float > 60:
+            adjusted_tea = tea_weight_float - 4
+        elif tea_weight_float > 25:
+            adjusted_tea = tea_weight_float - 3
+        elif tea_weight_float > 18:
+            adjusted_tea = tea_weight_float - 2
+        elif tea_weight_float > 10:
+            adjusted_tea = tea_weight_float - 1
+        else:
+            adjusted_tea = tea_weight_float
+
     # Create new work record
     work = Work(
         user_id=user_id,
@@ -147,7 +179,8 @@ async def create_work(
         other_cost=other_cost_float,
         other_location=other_location,
         advance_amount=advance_amount_float,
-        work_date=work_date_obj
+        work_date=work_date_obj,
+        adjusted_tea_weight=adjusted_tea if tea_weight_float is not None else None,
     )
     
     db.add(work)
@@ -161,7 +194,8 @@ async def tea_leaves_report(request: Request, db: Session = Depends(get_db)):
         Work.work_date,
         User.username,
         Work.tea_location,
-        Work.tea_weight
+        Work.tea_weight,
+        Work.adjusted_tea_weight,
     ).join(User).filter(
         Work.tea_weight > 0
     ).order_by(
@@ -211,11 +245,11 @@ async def dashboard(
     
     # Get monthly tea leaves total
     monthly_total = db.query(
-        func.sum(Work.tea_weight)
+        func.sum(Work.adjusted_tea_weight)
     ).filter(
         func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
         func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
-        Work.tea_weight > 0
+        Work.adjusted_tea_weight > 0
     ).scalar() or 0.0
 
     # Get user-wise totals for the month
@@ -236,6 +270,22 @@ async def dashboard(
     current_year = now.year
     years = list(range(2020, current_year + 1))
     
+    # Get factory tea totals
+    factory_tea_totals = db.query(
+        Factory.name,
+        func.sum(FactoryTea.leaves_weight).label('total_weight')
+    ).join(FactoryTea).filter(
+        func.strftime('%Y', FactoryTea.factory_date) == f"{selected_year:04d}",
+        func.strftime('%m', FactoryTea.factory_date) == f"{selected_month:02d}"
+    ).group_by(Factory.name).all()
+
+    total_factory_weight = db.query(
+        func.sum(FactoryTea.leaves_weight)
+    ).filter(
+        func.strftime('%Y', FactoryTea.factory_date) == f"{selected_year:04d}",
+        func.strftime('%m', FactoryTea.factory_date) == f"{selected_month:02d}"
+    ).scalar() or 0.0
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "monthly_total": monthly_total,
@@ -244,8 +294,139 @@ async def dashboard(
         "user_data": user_data,
         "years": years,
         "selected_year": selected_year,
-        "selected_month": selected_month
+        "selected_month": selected_month,
+        "total_factory_weight": total_factory_weight,
+        "factory_tea_totals": factory_tea_totals
     })
+
+@app.get("/salary")
+async def salary_report(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    price_per_kg: float = 48.214
+):
+    # Default to current month/year if not provided
+    now = datetime.now()
+    selected_year = year or now.year
+    selected_month = month or now.month
+    
+    # Get all users
+    users = db.query(User).all()
+    
+    # Get salary data for each user
+    salary_data = []
+    for user in users:
+        # Get tea leaves total
+        tea_total = db.query(
+            func.sum(Work.adjusted_tea_weight)
+        ).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.adjusted_tea_weight > 0
+        ).scalar() or 0.0
+        
+        # Get other work total
+        other_total = db.query(
+            func.sum(Work.other_cost)
+        ).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.other_cost > 0
+        ).scalar() or 0.0
+        
+        # Get advance total
+        advance_total = db.query(
+            func.sum(Work.advance_amount)
+        ).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.advance_amount > 0
+        ).scalar() or 0.0
+        
+        # Calculate values
+        tea_income = tea_total * price_per_kg
+        total_salary = tea_income + other_total
+        balance = total_salary - advance_total
+        
+        salary_data.append({
+            "user": user,
+            "tea_income": tea_income,
+            "other_income": other_total,
+            "total_salary": total_salary,
+            "advance": advance_total,
+            "balance": balance
+        })
+    
+    return templates.TemplateResponse("salary.html", {
+        "request": request,
+        "salary_data": salary_data,
+        "price_per_kg": price_per_kg,
+        "selected_year": selected_year,
+        "selected_month": selected_month,
+        "years": list(range(2020, now.year + 1))
+    })
+
+@app.get("/factories")
+async def factories_page(request: Request, db: Session = Depends(get_db)):
+    factories = db.query(Factory).order_by(Factory.created_at.desc()).all()
+    return templates.TemplateResponse("factories.html", {
+        "request": request,
+        "factories": factories
+    })
+
+@app.post("/factories")
+async def create_factory(
+    request: Request,
+    name: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    factory = Factory(name=name)
+    db.add(factory)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Factory name already exists")
+    return RedirectResponse(url="/factories", status_code=303)
+
+@app.post("/add-factory-tea")
+async def create_factory_tea(
+    request: Request,
+    factory_id: int = Form(...),
+    factory_date: str = Form(...),
+    weight_type: str = Form(...),
+    leaves_weight: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Parse numeric field
+    try:
+        weight = float(leaves_weight)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid weight value")
+
+    # Parse date
+    try:
+        date_obj = date.fromisoformat(factory_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    # Create factory tea record
+    factory_tea = FactoryTea(
+        factory_id=factory_id,
+        weight_type=weight_type,
+        leaves_weight=weight,
+        factory_date=date_obj
+    )
+    
+    db.add(factory_tea)
+    db.commit()
+    
+    return RedirectResponse(url="/add-work", status_code=303)
 
 # Add server runner
 if __name__ == "__main__":

@@ -1,26 +1,27 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
     {% include "components/head.html" %}
 </head>
+
 <body class="min-h-full bg-gray-50 dark:bg-gray-900">
     <div class="container mx-auto">
         {% include "header.html" %}
-        
+
         <div class="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
             <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Add Work Record</h2>
-            
-            <form class="space-y-4" method="POST" action="/add-work">
-                <div x-data="{ showTeaLocation: false, showOtherLocation: false, workDate: new Date().toISOString().split('T')[0] }" 
-                     x-init="workDate = new Date().toISOString().split('T')[0]"
-                     class="space-y-6">
+
+            <form method="post" class="space-y-4" x-data="workForm">
+                <div x-data="{ showTeaLocation: false, showOtherLocation: false, workDate: new Date().toISOString().split('T')[0] }"
+                    x-init="workDate = new Date().toISOString().split('T')[0]" class="space-y-6">
                     <!-- User Selection -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Select User
                         </label>
                         <select name="user_id" required
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                             <option value="" disabled selected>Select a user</option>
                             {% for user in users %}
                             <option value="{{ user.id }}">{{ user.username }}</option>
@@ -34,26 +35,34 @@
                             Work Date
                         </label>
                         <input type="date" name="work_date" x-model="workDate"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2"
-                               required>
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2"
+                            required>
                     </div>
 
                     <!-- Tea Leaves Section -->
                     <div class="space-y-3" x-data="{ teaWeight: '' }">
-                        <div>
+                        <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Tea Leaves Weight (kg)
+                                Tea Weight (kg)
+                                <input type="number" step="0.01" name="tea_weight"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2"
+                                    x-model="teaWeight">
                             </label>
-                            <input type="number" step="0.01" name="tea_weight"
-                                   x-model="teaWeight"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Adjusted Tea Weight (kg)
+                                <input type="number" step="0.01" readonly
+                                    class="mt-1 block w-full rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:border-gray-600 dark:text-gray-200 px-4 py-2 border-2 cursor-not-allowed"
+                                    :value="adjustedTeaWeight">
+                            </label>
                         </div>
                         <div x-show="teaWeight > 0">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Tea Leaves Location
                             </label>
                             <input type="text" name="tea_location"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                         </div>
                     </div>
 
@@ -63,16 +72,15 @@
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Other Work Cost
                             </label>
-                            <input type="number" step="0.01" name="other_cost"
-                                   x-model="otherCost"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            <input type="number" step="0.01" name="other_cost" x-model="otherCost"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                         </div>
                         <div x-show="otherCost > 0">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Other Work Location
                             </label>
                             <input type="text" name="other_location"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                         </div>
                     </div>
 
@@ -82,16 +90,91 @@
                             Advance Amount
                         </label>
                         <input type="number" step="0.01" name="advance_amount"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                     </div>
 
-                    <button type="submit" 
-                            class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                    <button type="submit"
+                        class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
                         Save Work Record
                     </button>
                 </div>
             </form>
+
+        </div>
+        <div class="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <!-- Add after the existing form -->
+            <form method="post" class="space-y-4 mt-8" action="/add-factory-tea"
+                x-data="{ factoryDate: new Date().toISOString().split('T')[0] }">
+                <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add Factory Tea Leaves</h2>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Factory
+                        </label>
+                        <select name="factory_id" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            <option value="">Select Factory</option>
+                            {% for factory in factories %}
+                            <option value="{{ factory.id }}">{{ factory.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Date
+                        </label>
+                        <input type="date" name="factory_date" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2"
+                            x-model="factoryDate">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Weight Type
+                        </label>
+                        <select name="weight_type" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Leaves Weight (kg)
+                        </label>
+                        <input type="number" step="0.01" name="leaves_weight" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+                    Save Factory Tea
+                </button>
+            </form>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('workForm', () => ({
+                teaWeight: '',
+                workDate: new Date().toISOString().split('T')[0],
+                factoryDate: new Date().toISOString().split('T')[0],
+                get adjustedTeaWeight() {
+                    const weight = parseFloat(this.teaWeight) || 0;
+                    if (weight > 60) return (weight - 4).toFixed(2);
+                    if (weight > 25) return (weight - 3).toFixed(2);
+                    if (weight > 18) return (weight - 2).toFixed(2);
+                    if (weight > 10) return (weight - 1).toFixed(2);
+                    return weight.toFixed(2);
+                }
+            }));
+        });
+    </script>
 </body>
-</html> 
+
+</html>

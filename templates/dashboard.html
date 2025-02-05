@@ -50,6 +50,44 @@
                     </div>
                 </div>
 
+                <!-- Add after the monthly tea leaves card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-300">Factory Tea Statistics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Total Factory Weight Card -->
+                        <div class="bg-green-50 dark:bg-gray-700 rounded-lg p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-green-600 dark:text-green-400">Total Factory Weight</p>
+                                    <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {{ "%.2f"|format(total_factory_weight) }} kg
+                                    </p>
+                                </div>
+                                <span class="bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-200 p-3 rounded-lg">
+                                    🏭
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Factory Breakdown Card -->
+                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">By Factory</h4>
+                            <div class="space-y-2">
+                                {% for factory in factory_tea_totals %}
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ factory.name }}</span>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ "%.2f"|format(factory.total_weight) }} kg
+                                    </span>
+                                </div>
+                                {% else %}
+                                <p class="text-sm text-gray-500 dark:text-gray-400 text-center">No factory tea data available</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Add after the Tea Leaves Card -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
@@ -103,6 +141,7 @@
                         <canvas id="contributionChart"></canvas>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
