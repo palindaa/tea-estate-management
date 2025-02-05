@@ -161,13 +161,9 @@ async def tea_leaves_report(request: Request, db: Session = Depends(get_db)):
         Work.work_date,
         User.username,
         Work.tea_location,
-        func.sum(Work.tea_weight).label('total_tea')
+        Work.tea_weight
     ).join(User).filter(
         Work.tea_weight > 0
-    ).group_by(
-        Work.user_id,
-        Work.work_date,
-        Work.tea_location
     ).order_by(
         Work.work_date.desc(),
         User.username
@@ -222,6 +218,20 @@ async def dashboard(
         Work.tea_weight > 0
     ).scalar() or 0.0
 
+    # Get user-wise totals for the month
+    user_totals = db.query(
+        User.username,
+        func.sum(Work.tea_weight).label('user_total')
+    ).join(Work).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+        Work.tea_weight > 0
+    ).group_by(User.id).all()
+
+    # Prepare chart data
+    user_labels = [user.username for user in user_totals]
+    user_data = [float(user.user_total) for user in user_totals]
+
     # Generate year options (2020 to current year)
     current_year = now.year
     years = list(range(2020, current_year + 1))
@@ -229,6 +239,9 @@ async def dashboard(
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "monthly_total": monthly_total,
+        "user_totals": user_totals,
+        "user_labels": user_labels,
+        "user_data": user_data,
         "years": years,
         "selected_year": selected_year,
         "selected_month": selected_month
