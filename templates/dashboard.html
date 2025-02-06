@@ -142,6 +142,16 @@
                     </div>
                 </div>
 
+                <!-- Add before the contribution distribution chart -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+                    <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
+                        Last 30 Days Tea Production
+                    </h3>
+                    <div class="relative h-96">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -178,7 +188,66 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return ` ${context.label}: ${context.formattedValue} kg (${context.rawPercentage.toFixed(1)}%)`;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 
+                                    ? (context.raw / total * 100).toFixed(1) + '%'
+                                    : '0%';
+                                return ` ${context.label}: ${context.formattedValue} kg (${percentage})`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Daily Tea Production Bar Chart
+        const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+        new Chart(dailyCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ daily_labels|safe }},
+                datasets: {{ location_datasets|tojson|safe }}
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#E5E7EB' : '#6B7280',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#374151' : '#E5E7EB'
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#E5E7EB' : '#6B7280'
+                        },
+                        grid: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#374151' : '#E5E7EB'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#E5E7EB' : '#6B7280'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 
+                                    ? (context.raw / total * 100).toFixed(1) + '%'
+                                    : '0%';
+                                return ` ${context.dataset.label}: ${context.formattedValue} kg (${percentage})`;
                             }
                         }
                     }

@@ -9,7 +9,7 @@ from sqlalchemy.sql import func
 import uvicorn
 from typing import Optional
 from fastapi import HTTPException
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy.exc import IntegrityError
 
 # Database setup
@@ -35,6 +35,7 @@ class Work(Base):
     adjusted_tea_weight = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     work_date = Column(Date, nullable=False, server_default=func.current_date())
+    work_description = Column(String, nullable=True)
 
     def __repr__(self):
         return f"<Work(id={self.id}, user_id={self.user_id}, date={self.work_date})>"
@@ -74,9 +75,15 @@ app = FastAPI()
 # Configure templates
 templates = Jinja2Templates(directory="templates")
 
+# Add custom Jinja filters
+def format_commas(value):
+    return "{:,.0f}".format(float(value)) if float(value) % 1 == 0 else "{:,.2f}".format(float(value))
+
+templates.env.filters["thousands_commas"] = format_commas
+
 @app.get("/")
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def read_root():
+    return RedirectResponse(url="/dashboard")
 
 # Add ping endpoint
 @app.get("/ping")
@@ -134,6 +141,7 @@ async def create_work(
     other_location: Optional[str] = Form(None),
     advance_amount: Optional[str] = Form(None),
     work_date: Optional[str] = Form(None),
+    work_description: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     def parse_float(value: Optional[str]) -> Optional[float]:
@@ -181,6 +189,7 @@ async def create_work(
         advance_amount=advance_amount_float,
         work_date=work_date_obj,
         adjusted_tea_weight=adjusted_tea if tea_weight_float is not None else None,
+        work_description=work_description
     )
     
     db.add(work)
@@ -214,13 +223,15 @@ async def other_work_report(request: Request, db: Session = Depends(get_db)):
         Work.work_date,
         User.username,
         Work.other_location,
+        Work.work_description,
         func.sum(Work.other_cost).label('total_cost')
     ).join(User).filter(
         Work.other_cost > 0
     ).group_by(
         Work.user_id,
         Work.work_date,
-        Work.other_location
+        Work.other_location,
+        Work.work_description
     ).order_by(
         Work.work_date.desc(),
         User.username
@@ -286,6 +297,45 @@ async def dashboard(
         func.strftime('%m', FactoryTea.factory_date) == f"{selected_month:02d}"
     ).scalar() or 0.0
 
+    # Get 30-day tea leaves data
+    end_date = date.today()
+    start_date = end_date - timedelta(days=29)
+    
+    daily_tea_totals = db.query(
+        func.date(Work.work_date).label('date'),
+        Work.tea_location,
+        func.sum(Work.adjusted_tea_weight).label('total')
+    ).filter(
+        Work.work_date >= start_date,
+        Work.work_date <= end_date,
+        Work.adjusted_tea_weight > 0
+    ).group_by(func.date(Work.work_date), Work.tea_location).all()
+
+    # Create complete date range with zeros
+    date_range = [start_date + timedelta(days=x) for x in range(30)]
+    daily_labels = [d.strftime('%Y-%m-%d') for d in date_range]
+
+    locations = list({result.tea_location for result in daily_tea_totals if result.tea_location})
+    location_data = {loc: [0]*30 for loc in locations}
+
+    # Fill the location data
+    for result in daily_tea_totals:
+        idx = (datetime.strptime(result.date, '%Y-%m-%d').date() - start_date).days
+        if 0 <= idx < 30:
+            location_data[result.tea_location][idx] += float(result.total)
+
+    # Convert to chart.js format
+    location_datasets = []
+    colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+    for i, (loc, values) in enumerate(location_data.items()):
+        location_datasets.append({
+            'label': loc or 'Unknown Location',
+            'data': values,
+            'backgroundColor': colors[i % len(colors)] + '77',  # Add alpha channel
+            'borderColor': colors[i % len(colors)],
+            'borderWidth': 1
+        })
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "monthly_total": monthly_total,
@@ -296,7 +346,9 @@ async def dashboard(
         "selected_year": selected_year,
         "selected_month": selected_month,
         "total_factory_weight": total_factory_weight,
-        "factory_tea_totals": factory_tea_totals
+        "factory_tea_totals": factory_tea_totals,
+        "daily_labels": daily_labels,
+        "location_datasets": location_datasets
     })
 
 @app.get("/salary")

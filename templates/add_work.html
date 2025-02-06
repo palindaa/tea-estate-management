@@ -75,6 +75,15 @@
                             <input type="number" step="0.01" name="other_cost" x-model="otherCost"
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                         </div>
+                        
+                        <div x-show="otherCost > 0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Work Description (optional)
+                            </label>
+                            <input type="text" name="work_description"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                        </div>
+
                         <div x-show="otherCost > 0">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Other Work Location
