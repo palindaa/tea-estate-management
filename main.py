@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import HTTPException
 from datetime import datetime, date, timedelta
 from sqlalchemy.exc import IntegrityError
+from calendar import monthcalendar
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
@@ -22,6 +23,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True)
     paytype = Column(String)
+    basic_salary = Column(Float, nullable=True, default=0.0)
+    weekly_salary = Column(Float, nullable=True, default=0.0)
 
 class Work(Base):
     __tablename__ = "works"
@@ -99,10 +102,18 @@ async def users_page(request: Request, db: Session = Depends(get_db)):
 async def create_user(
     request: Request,
     username: str = Form(...),
-    paytype: str = Form(...),
+    paytype: list[str] = Form(...),
+    basic_salary: Optional[float] = Form(None),
+    weekly_salary: Optional[float] = Form(None),
     db: Session = Depends(get_db)
 ):
-    user = User(username=username, paytype=paytype)
+    paytype_str = ",".join(paytype)
+    user = User(
+        username=username,
+        paytype=paytype_str,
+        basic_salary=basic_salary,
+        weekly_salary=weekly_salary
+    )
     db.add(user)
     db.commit()
     return RedirectResponse(url="/users", status_code=303)
@@ -400,27 +411,58 @@ async def salary_report(
             Work.advance_amount > 0
         ).scalar() or 0.0
         
+        # Count tea work days
+        tea_days = db.query(
+            func.count(func.distinct(Work.work_date))
+        ).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.tea_weight > 0
+        ).scalar() or 0
+
+        # Count extra work days
+        extra_days = db.query(
+            func.count(func.distinct(Work.work_date))
+        ).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.other_cost > 0
+        ).scalar() or 0
+
         # Calculate values
         tea_income = tea_total * price_per_kg
         total_salary = tea_income + other_total
-        balance = total_salary - advance_total
-        
+
+        # Calculate number of Fridays in the selected month
+        def count_fridays_in_month(year, month):
+            return sum(1 for week in monthcalendar(year, month) if week[4] != 0)
+
+        fridays_count = count_fridays_in_month(selected_year, selected_month)
+        adjusted_basic = (user.basic_salary or 0) + (fridays_count * (user.weekly_salary or 0))
+        balance = adjusted_basic + total_salary - advance_total
         salary_data.append({
             "user": user,
             "tea_income": tea_income,
             "other_income": other_total,
             "total_salary": total_salary,
             "advance": advance_total,
-            "balance": balance
+            "balance": balance,
+            "adjusted_basic": adjusted_basic,
+            "tea_days": tea_days,
+            "extra_days": extra_days
         })
-    
+
     return templates.TemplateResponse("salary.html", {
         "request": request,
         "salary_data": salary_data,
         "price_per_kg": price_per_kg,
         "selected_year": selected_year,
         "selected_month": selected_month,
-        "years": list(range(2020, now.year + 1))
+        "years": list(range(2020, now.year + 1)),
+        "users": users,
+        "fridays_count": fridays_count
     })
 
 @app.get("/factories")
@@ -479,6 +521,34 @@ async def create_factory_tea(
     db.commit()
     
     return RedirectResponse(url="/add-work", status_code=303)
+
+@app.get("/advances")
+async def advances_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = 1,
+    limit: int = 50
+):
+    offset = (page - 1) * limit
+    advances = db.query(
+        User.username,
+        Work.work_date,
+        Work.advance_amount
+    ).join(User).filter(
+        Work.advance_amount > 0
+    ).order_by(
+        Work.work_date.desc()
+    ).offset(offset).limit(limit).all()
+
+    total = db.query(Work).filter(Work.advance_amount > 0).count()
+
+    return templates.TemplateResponse("advances.html", {
+        "request": request,
+        "advances": advances,
+        "current_page": page,
+        "total_pages": (total + limit - 1) // limit,
+        "limit": limit
+    })
 
 # Add server runner
 if __name__ == "__main__":
