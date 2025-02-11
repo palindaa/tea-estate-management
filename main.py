@@ -358,6 +358,19 @@ async def dashboard(
             'borderWidth': 1
         })
 
+    # Get location-based totals
+    location_totals = db.query(
+        Work.tea_location,
+        func.sum(Work.adjusted_tea_weight).label('total_weight')
+    ).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+        Work.adjusted_tea_weight > 0
+    ).group_by(Work.tea_location).all()
+
+    location_labels = [loc.tea_location or 'Unknown' for loc in location_totals]
+    location_data = [float(loc.total_weight) for loc in location_totals]
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "monthly_total": monthly_total,
@@ -370,7 +383,9 @@ async def dashboard(
         "total_factory_weight": total_factory_weight,
         "factory_tea_totals": factory_tea_totals,
         "daily_labels": daily_labels,
-        "location_datasets": location_datasets
+        "location_datasets": location_datasets,
+        "location_labels": location_labels,
+        "location_data": location_data
     })
 
 def week_of_month(dt):
