@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    {% include "components/head.html" %}
+</head>
+<body class="min-h-full bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto">
+        {% include "header.html" %}
+        
+        <div class="max-w-6xl mx-auto mt-8 p-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
+                    Daily Tea Leaves Report - {{ "%04d-%02d"|format(selected_year, selected_month) }}
+                </h2>
+                
+                <form method="get" class="flex flex-wrap gap-4 mb-6">
+                    <div class="flex gap-2 items-center">
+                        <select name="year" class="rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1">
+                            {% for y in years %}
+                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="month" class="rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1">
+                            {% for m in range(1,13) %}
+                            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                        Filter
+                    </button>
+                </form>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                        <thead class="bg-gray-50 dark:bg-gray-600">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Adjusted Tea</th>
+                                {% for factory in factories %}
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Verified {{ factory.name }}</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Unverified {{ factory.name }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                            {% for data in daily_data %}
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                    {{ data.date }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                    {{ "%.2f"|format(data.adjusted_tea) }}
+                                </td>
+                                {% for factory in factories %}
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                    {{ "%.2f"|format(data.factories.get(factory.id, {}).verified|default(0)) }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                    {{ "%.2f"|format(data.factories.get(factory.id, {}).unverified|default(0)) }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                                    No data available for selected period
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-600 font-semibold">
+                            <tr>
+                                <td class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Total</td>
+                                <td class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                    {{ "%.2f"|format(total_adjusted) }}
+                                </td>
+                                {% for factory in factories %}
+                                <td class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                    {{ "%.2f"|format(factory_totals[factory.id].verified) }}
+                                </td>
+                                <td class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                    {{ "%.2f"|format(factory_totals[factory.id].unverified) }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

@@ -34,8 +34,26 @@
                             Calculate
                         </button>
                     </div>
+                    
+                    <div class="flex gap-2 items-center">
+                        <select name="week" 
+                                class="rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1"
+                                onchange="this.form.submit()">
+                            <option value="1" {% if selected_week == 1 %}selected{% endif %}>Week 1</option>
+                            <option value="2" {% if selected_week == 2 %}selected{% endif %}>Week 2</option>
+                            <option value="3" {% if selected_week == 3 %}selected{% endif %}>Week 3</option>
+                            <option value="4" {% if selected_week == 4 %}selected{% endif %}>Week 4</option>
+                            <option value="5" {% if selected_week == 5 %}selected{% endif %}>Week 5</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex gap-2 items-center">
+                        <a href="/generate-pdf?year={{ selected_year }}&month={{ selected_month }}&price_per_kg={{ price_per_kg }}"
+                           class="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 transition-colors whitespace-nowrap">
+                            Download PDF
+                        </a>
+                    </div>
                 </form>
-
 
                 <div class="mb-12">
                     <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Monthly Pay Employees</h3>
@@ -44,14 +62,15 @@
                             <thead class="bg-gray-50 dark:bg-gray-600">
                                 <tr>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">User</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Basic Salary</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tea Income</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Extra Work</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Total Work Value</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Advance</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Balance</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tea Plucked Days</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Daily Work Days</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Basic Salary</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Tea Weight (Kg)</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Tea Income</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Extra Work</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Total Work Value</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Advance</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Balance</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Tea Plucked Days</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase sortable">Daily Work Days</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
@@ -62,6 +81,9 @@
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                         {{ ((data.user.basic_salary | default(0)) + (fridays_count * data.user.weekly_salary | default(0))) | thousands_commas }}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                        {{ "%.2f"|format(data.tea_weight) }}
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                         {{ "%.2f"|format(data.tea_income) }}
@@ -99,6 +121,7 @@
 
                 <div class="mt-8">
                     <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Weekly Pay Employees</h3>
+
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
                             <thead class="bg-gray-50 dark:bg-gray-600">
@@ -110,7 +133,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                                {% for data in salary_data if 'Weekly' in data.user.paytype %}
+                                {% for data in weekly_salary_data %}
                                 <tr>
                                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                                         {{ data.user.username }}
@@ -122,12 +145,12 @@
                                         {{ "%.2f"|format(data.advance) }}
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 text-right">
-                                        {{ ((data.user.weekly_salary | default(0)) + data.total_salary - data.advance) | round(2) | thousands_commas }}
+                                        {{ data.balance | round(2) | thousands_commas }}
                                     </td>
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="4" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="5" class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
                                         No weekly pay employees found
                                     </td>
                                 </tr>
@@ -140,5 +163,59 @@
             </div>
         </div>
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const getCellValue = (row, index) => row.children[index].innerText || row.children[index].textContent;
+        
+        const comparer = (index, asc) => (a, b) => {
+            const valA = parseFloat(getCellValue(asc ? a : b, index).replace(/,/g, ''));
+            const valB = parseFloat(getCellValue(asc ? b : a, index).replace(/,/g, ''));
+            return valA - valB;
+        };
+
+        document.querySelectorAll('th.sortable').forEach(headerCell => {
+            headerCell.addEventListener('click', () => {
+                const table = headerCell.closest('table');
+                const tbody = table.querySelector('tbody');
+                const headerIndex = Array.prototype.indexOf.call(headerCell.parentElement.children, headerCell);
+                const isAsc = headerCell.classList.contains('asc');
+                
+                Array.from(tbody.querySelectorAll('tr'))
+                    .sort(comparer(headerIndex, isAsc))
+                    .forEach(tr => tbody.appendChild(tr));
+
+                table.querySelectorAll('th').forEach(th => th.classList.remove('asc', 'desc'));
+                headerCell.classList.toggle('asc', !isAsc);
+                headerCell.classList.toggle('desc', isAsc);
+            });
+        });
+    });
+    </script>
+
+    <style>
+    th.sortable {
+        cursor: pointer;
+        position: relative;
+    }
+
+    th.sortable:hover {
+        background-color: #f0f0f0;
+    }
+
+    th.sortable.asc::after {
+        content: '↑';
+        position: absolute;
+        right: 8px;
+        color: #666;
+    }
+
+    th.sortable.desc::after {
+        content: '↓';
+        position: absolute;
+        right: 8px;
+        color: #666;
+    }
+    </style>
 </body>
 </html> 

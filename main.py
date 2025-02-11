@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Depends, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
-from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date
+from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date, case
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import func
@@ -12,6 +12,10 @@ from fastapi import HTTPException
 from datetime import datetime, date, timedelta
 from sqlalchemy.exc import IntegrityError
 from calendar import monthcalendar
+from xhtml2pdf import pisa
+from fastapi.responses import StreamingResponse
+import io
+from collections import defaultdict
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
@@ -103,16 +107,23 @@ async def create_user(
     request: Request,
     username: str = Form(...),
     paytype: list[str] = Form(...),
-    basic_salary: Optional[float] = Form(None),
-    weekly_salary: Optional[float] = Form(None),
+    basic_salary: str = Form(""),
+    weekly_salary: str = Form(""),
     db: Session = Depends(get_db)
 ):
+    # Handle empty salary inputs
+    def parse_salary(value: str) -> float:
+        try:
+            return float(value) if value.strip() else 0.0
+        except ValueError:
+            return 0.0
+
     paytype_str = ",".join(paytype)
     user = User(
         username=username,
         paytype=paytype_str,
-        basic_salary=basic_salary,
-        weekly_salary=weekly_salary
+        basic_salary=parse_salary(basic_salary),
+        weekly_salary=parse_salary(weekly_salary)
     )
     db.add(user)
     db.commit()
@@ -362,18 +373,24 @@ async def dashboard(
         "location_datasets": location_datasets
     })
 
+def week_of_month(dt):
+    first_day = dt.replace(day=1)
+    return (dt.isocalendar()[1] - first_day.isocalendar()[1])
+    
 @app.get("/salary")
 async def salary_report(
     request: Request,
     db: Session = Depends(get_db),
     year: int = None,
     month: int = None,
+    week: str = None,
     price_per_kg: float = 48.214
 ):
     # Default to current month/year if not provided
     now = datetime.now()
     selected_year = year or now.year
     selected_month = month or now.month
+    selected_week = (int(week) if week is not None else week_of_month(now))
     
     # Get all users
     users = db.query(User).all()
@@ -444,6 +461,7 @@ async def salary_report(
         balance = adjusted_basic + total_salary - advance_total
         salary_data.append({
             "user": user,
+            "tea_weight": tea_total,
             "tea_income": tea_income,
             "other_income": other_total,
             "total_salary": total_salary,
@@ -454,7 +472,40 @@ async def salary_report(
             "extra_days": extra_days
         })
 
-    return templates.TemplateResponse("salary.html", {
+    # Process weekly employees with week filter
+    weekly_salary_data = []
+    for user in users:
+        if 'Weekly' not in user.paytype:
+            continue
+
+        # Base query
+        query = db.query(Work).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}"
+        )
+
+        # Apply week filter
+        week_start = (selected_week - 1) * 7 + 1
+        week_end = week_start + 6
+        query = query.filter(
+            func.strftime('%d', Work.work_date).between(f"{week_start:02d}", f"{week_end:02d}")
+        )
+
+        # Calculate totals
+        advance_total = query.with_entities(func.sum(Work.advance_amount)).scalar() or 0.0
+        work_days = query.count()
+
+        print('Work', work_days, advance_total, user.weekly_salary, week)
+        weekly_salary_data.append({
+            "user": user,
+            "advance": advance_total,
+            "work_days": work_days,
+            "balance": (user.weekly_salary or 0) - advance_total
+        })
+
+    # Add current datetime to context
+    context = {
         "request": request,
         "salary_data": salary_data,
         "price_per_kg": price_per_kg,
@@ -462,8 +513,13 @@ async def salary_report(
         "selected_month": selected_month,
         "years": list(range(2020, now.year + 1)),
         "users": users,
-        "fridays_count": fridays_count
-    })
+        "fridays_count": fridays_count,
+        "now": now,
+        "selected_week": selected_week,
+        "weekly_salary_data": weekly_salary_data
+    }
+
+    return templates.TemplateResponse("salary.html", context)
 
 @app.get("/factories")
 async def factories_page(request: Request, db: Session = Depends(get_db)):
@@ -548,6 +604,130 @@ async def advances_page(
         "current_page": page,
         "total_pages": (total + limit - 1) // limit,
         "limit": limit
+    })
+
+@app.get("/generate-pdf")
+async def generate_pdf(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    price_per_kg: float = 48.214
+):
+    # Get the same data as salary report
+    salary_report_data = await salary_report(request, db, year, month, price_per_kg)
+    context = salary_report_data.context
+    
+    # Add current datetime to context
+    context["now"] = datetime.now()
+    
+    # Render PDF template
+    pdf_html = templates.get_template("salary_pdf.html").render(context)
+
+    
+    # Create PDF
+    pdf = io.BytesIO()
+    pisa.CreatePDF(pdf_html, dest=pdf)
+    pdf.seek(0)
+    
+    return StreamingResponse(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=salary_report_{year}_{month}.pdf"}
+    )
+
+@app.get("/daily-tea")
+async def daily_tea_report(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None
+):
+    # Default to current month/year if not provided
+    now = datetime.now()
+    selected_year = year or now.year
+    selected_month = month or now.month
+
+    # Get tea weights from works
+    works_data = db.query(
+        Work.work_date,
+        func.sum(Work.adjusted_tea_weight).label('total_adjusted')
+    ).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}"
+    ).group_by(Work.work_date).all()
+
+    # Get all factories
+    factories = db.query(Factory).all()
+    factory_map = {f.id: f.name for f in factories}
+
+    # Get factory tea data per factory
+    factory_data = db.query(
+        FactoryTea.factory_date,
+        FactoryTea.factory_id,
+        func.sum(case((FactoryTea.weight_type == 'verified', FactoryTea.leaves_weight), else_=0)).label('verified'),
+        func.sum(case((FactoryTea.weight_type == 'unverified', FactoryTea.leaves_weight), else_=0)).label('unverified')
+    ).filter(
+        func.strftime('%Y', FactoryTea.factory_date) == f"{selected_year:04d}",
+        func.strftime('%m', FactoryTea.factory_date) == f"{selected_month:02d}"
+    ).group_by(FactoryTea.factory_date, FactoryTea.factory_id).all()
+
+    # Process factory data
+    factory_dict = defaultdict(dict)
+    for date, factory_id, v, u in factory_data:
+        factory_dict[date][factory_id] = {
+            'verified': v,
+            'unverified': u,
+            'name': factory_map.get(factory_id, f"Factory {factory_id}")
+        }
+
+    # Combine data
+    daily_data = []
+    date_set = set()
+    
+    # Process works data
+    works_dict = {date: total for date, total in works_data}
+    date_set.update([date for date, _ in works_data])
+    
+    # Process factory data
+    date_set.update(factory_dict.keys())
+    
+    # Process factory data into daily_data
+    for date in sorted(date_set, reverse=True):
+        entry = {
+            "date": date,
+            "adjusted_tea": works_dict.get(date, 0.0),
+            "factories": {}
+        }
+        
+        # Add factory data
+        if date in factory_dict:
+            for factory_id, values in factory_dict[date].items():
+                entry["factories"][factory_id] = {
+                    "verified": values['verified'],
+                    "unverified": values['unverified']
+                }
+        
+        daily_data.append(entry)
+
+    # Calculate factory totals
+    factory_totals = defaultdict(lambda: {'verified': 0.0, 'unverified': 0.0})
+    for entry in daily_data:
+        for factory_id, values in entry["factories"].items():
+            factory_totals[factory_id]['verified'] += values['verified']
+            factory_totals[factory_id]['unverified'] += values['unverified']
+
+    return templates.TemplateResponse("daily_tea.html", {
+        "request": request,
+        "daily_data": daily_data,
+        "selected_year": selected_year,
+        "selected_month": selected_month,
+        "years": list(range(2020, now.year + 1)),
+        "total_adjusted": sum(d['adjusted_tea'] for d in daily_data),
+        "total_verified": sum(d['factories'][factory_id]['verified'] for d in daily_data for factory_id in d['factories']),
+        "total_unverified": sum(d['factories'][factory_id]['unverified'] for d in daily_data for factory_id in d['factories']),
+        "factories": factories,
+        "factory_totals": factory_totals
     })
 
 # Add server runner
