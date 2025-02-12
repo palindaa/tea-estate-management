@@ -41,8 +41,7 @@
             <div class="space-y-2">
                 <label class="block text-gray-700 dark:text-gray-300">{{ factory.name }} Price/Kg</label>
                 <input type="number" step="0.01" name="price_{{ factory.id }}" 
-                    class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600
-                           focus:outline-none focus:ring-2 focus:ring-green-500"
+                    class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                     value="200"
                     required>
             </div>
@@ -75,8 +74,8 @@
                     {% for factory in factory_revenues %}
                     <tr class="border-b">
                         <td class="py-2 text-gray-700 dark:text-gray-300">{{ factory.name }}</td>
-                        <td class="py-2 text-right">{{ (factory.verified + factory.unverified)|thousands_commas }}</td>
-                        <td class="py-2 text-right">{{ factory.revenue|thousands_commas }}</td>
+                        <td class="py-2 text-right dark:text-gray-200">{{ (factory.verified + factory.unverified)|thousands_commas }}</td>
+                        <td class="py-2 text-right dark:text-gray-200">{{ factory.revenue|thousands_commas }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -89,23 +88,23 @@
             <div class="space-y-4">
                 <div class="flex justify-between">
                     <span class="text-gray-700 dark:text-gray-300">Total Tea Revenue:</span>
-                    <span class="font-medium">{{ total_revenue|thousands_commas }}</span>
+                    <span class="font-medium dark:text-gray-200">{{ total_revenue|thousands_commas }}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-700 dark:text-gray-300">Total Payroll:</span>
-                    <span class="font-medium">{{ total_payroll|thousands_commas }}</span>
+                    <span class="font-medium dark:text-gray-200">{{ total_payroll|thousands_commas }}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-700 dark:text-gray-300">Total Tea Payment:</span>
-                    <span class="font-medium">{{ total_tea_income|thousands_commas }}</span>
+                    <span class="font-medium dark:text-gray-200">{{ total_tea_income|thousands_commas }}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-700 dark:text-gray-300">Other Expenses:</span>
-                    <span class="font-medium">{{ other_work_total|thousands_commas }}</span>
+                    <span class="font-medium dark:text-gray-200">{{ other_work_total|thousands_commas }}</span>
                 </div>
                 <div class="flex justify-between border-t pt-4">
                     <span class="text-gray-700 dark:text-gray-300 font-semibold">Net Profit:</span>
-                    <span class="font-bold text-green-600">{{ total_profit|thousands_commas }}</span>
+                    <span class="font-bold text-green-600 dark:text-green-400">{{ total_profit|thousands_commas }}</span>
                 </div>
             </div>
         </div>

@@ -94,8 +94,8 @@ def get_db():
 
 app = FastAPI()
 
-# Remove or comment out the static files mount if not needed
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+# Add this line to mount static files (should be after app creation and before routes)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Configure templates
 templates = Jinja2Templates(directory="templates")
