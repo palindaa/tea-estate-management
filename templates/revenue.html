@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    {% include "components/head.html" %}
+</head>
+<body class="min-h-full bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto">
+        {% include "header.html" %}
+        
+    <h1 class="text-3xl font-bold mb-6 text-gray-800 dark:text-white">
+        Revenue Report - {{ "%04d-%02d"|format(selected_year, selected_month) }}
+    </h1>
+
+    <!-- Date Selection -->
+    <div class="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+        <form method="GET" class="flex gap-4 items-end">
+            <div>
+                <label class="block text-gray-700 dark:text-gray-300 mb-2">Year</label>
+                <select name="year" class="form-select dark:bg-gray-700">
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-gray-700 dark:text-gray-300 mb-2">Month</label>
+                <select name="month" class="form-select dark:bg-gray-700">
+                    {% for m in range(1,13) %}
+                    <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tea Price Input Form -->
+    <div class="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Tea Price Configuration</h2>
+        <form method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for factory in factory_data %}
+            <div class="space-y-2">
+                <label class="block text-gray-700 dark:text-gray-300">{{ factory.name }} Price/Kg</label>
+                <input type="number" step="0.01" name="price_{{ factory.id }}" 
+                    class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600
+                           focus:outline-none focus:ring-2 focus:ring-green-500"
+                    value="200"
+                    required>
+            </div>
+            {% endfor %}
+            <div class="md:col-span-3 flex justify-start mt-2">
+                <button type="submit" 
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg
+                           transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500
+                           text-sm md:text-base">
+                    Calculate Revenue
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Revenue Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Factory-wise Breakdown -->
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Factory Revenue</h2>
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b">
+                        <th class="text-left py-2 text-gray-700 dark:text-gray-300">Factory</th>
+                        <th class="text-right py-2 text-gray-700 dark:text-gray-300">Total Tea (kg)</th>
+                        <th class="text-right py-2 text-gray-700 dark:text-gray-300">Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factory in factory_revenues %}
+                    <tr class="border-b">
+                        <td class="py-2 text-gray-700 dark:text-gray-300">{{ factory.name }}</td>
+                        <td class="py-2 text-right">{{ (factory.verified + factory.unverified)|thousands_commas }}</td>
+                        <td class="py-2 text-right">{{ factory.revenue|thousands_commas }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Financial Summary</h2>
+            <div class="space-y-4">
+                <div class="flex justify-between">
+                    <span class="text-gray-700 dark:text-gray-300">Total Tea Revenue:</span>
+                    <span class="font-medium">{{ total_revenue|thousands_commas }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-700 dark:text-gray-300">Total Payroll:</span>
+                    <span class="font-medium">{{ total_payroll|thousands_commas }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-700 dark:text-gray-300">Total Tea Payment:</span>
+                    <span class="font-medium">{{ total_tea_income|thousands_commas }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-700 dark:text-gray-300">Other Expenses:</span>
+                    <span class="font-medium">{{ other_work_total|thousands_commas }}</span>
+                </div>
+                <div class="flex justify-between border-t pt-4">
+                    <span class="text-gray-700 dark:text-gray-300 font-semibold">Net Profit:</span>
+                    <span class="font-bold text-green-600">{{ total_profit|thousands_commas }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html> 

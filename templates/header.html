@@ -10,18 +10,49 @@
         </h1>
     </div>
     
+    <!-- Desktop Navigation -->
     <nav class="hidden md:flex space-x-8">
+        <!-- Dashboard -->
         <a href="/dashboard" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Dashboard</a>
+
+        <!-- Add Work -->
         <a href="/add-work" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Add Work</a>
-        <a href="/tea-leaves" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Leaves Report</a>
-        <a href="/daily-tea" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Daily Tea</a>
+
+        <!-- Leaves Dropdown -->
+        <div class="relative group" x-data="{ open: false }">
+            <button @click="open = !open" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center">
+                Leaves
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="open" @click.away="open = false" class="absolute z-10 mt-2 w-48 bg-white dark:bg-gray-800 shadow-lg rounded-lg py-2">
+                <a href="/tea-leaves" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Leaves Report</a>
+                <a href="/daily-tea" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Daily Tea</a>
+                <a href="/factories" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Factories</a>
+            </div>
+        </div>
+
+        <!-- Other Work -->
         <a href="/other-work" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Other Work</a>
-        <a href="/advances" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-            Advance
-        </a>
-        <a href="/salary" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Salary</a>
+
+        <!-- Payments Dropdown -->
+        <div class="relative group" x-data="{ open: false }">
+            <button @click="open = !open" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center">
+                Payments
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="open" @click.away="open = false" class="absolute z-10 mt-2 w-48 bg-white dark:bg-gray-800 shadow-lg rounded-lg py-2">
+                <a href="/advances" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Advance</a>
+                <a href="/salary" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Salary</a>
+                <a href="/revenue" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Revenue</a>
+            </div>
+        </div>
+
+        <!-- Users -->
         <a href="/users" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
-        <a href="/factories" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Factories</a>
     </nav>
 
     <!-- Mobile menu button -->
@@ -35,14 +66,38 @@
     <div x-show="open" class="md:hidden absolute top-16 right-0 w-full bg-white dark:bg-gray-800 shadow-lg">
         <div class="px-2 pt-2 pb-3 space-y-1">
             <a href="/dashboard" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Dashboard</a>
-            <a href="/users" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
             <a href="/add-work" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Add Work</a>
-            <a href="/tea-leaves" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Leaves Report</a>
-            <a href="/daily-tea" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Daily Tea</a>
+            
+            <div class="pl-3">
+                <h3 class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm font-medium">Leaves</h3>
+                <a href="/tea-leaves" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Leaves Report</a>
+                <a href="/daily-tea" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Daily Tea</a>
+                <a href="/factories" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Factories</a>
+            </div>
+
             <a href="/other-work" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Other Work</a>
-            <a href="/salary" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Salary</a>
-            <a href="/factories" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Factories</a>
-            <a href="/advances" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Advance Payments</a>
+            
+            <div class="pl-3">
+                <h3 class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm font-medium">Payments</h3>
+                <a href="/advances" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Advance</a>
+                <a href="/salary" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Salary</a>
+                <a href="/revenue" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Revenue</a>
+            </div>
+
+            <a href="/users" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
         </div>
     </div>
+
+    <nav>
+        <!-- Existing links -->
+        <div class="auth-links">
+            {% if current_user %}
+                <a href="/logout">Logout</a>
+                {% if current_user.role == "admin" %}
+                {% endif %}
+            {% else %}
+                <a href="/login">Login</a>
+            {% endif %}
+        </div>
+    </nav>
 </div> 

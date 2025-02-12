@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Request, Depends, Form
+from fastapi import FastAPI, Request, Depends, Form, Cookie
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
-from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date, case
+from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date, case, Enum as SQLAlchemyEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import func
@@ -16,11 +16,29 @@ from xhtml2pdf import pisa
 from fastapi.responses import StreamingResponse
 import io
 from collections import defaultdict
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from enum import Enum
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 Base = declarative_base()
+
+class UserRole(str, Enum):
+    ADMIN = 'admin'
+    USER = 'user'
+
+# INSERT INTO admin (username, email, hashed_password, role)VALUES (    'admin_root',    'root@root.com',    '$2b$12$MUXDZvtmHAWdFfsaVgmide3//3RnCzp24ssnvOQ6MI3Yw9LPzq0Qi',    'ADMIN')ON CONFLICT(email) DO NOTHING;
+
+class AdminUser(Base):
+    __tablename__ = "admin"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True)
+    email = Column(String(100), unique=True)
+    hashed_password = Column(String(100))
+    role = Column(SQLAlchemyEnum(UserRole, name='userrole_enum'), default=UserRole.USER)
 
 class User(Base):
     __tablename__ = "users"
@@ -88,6 +106,49 @@ def format_commas(value):
 
 templates.env.filters["thousands_commas"] = format_commas
 
+# Replace Flask-Login initialization with
+SECRET_KEY = "your-secret-key-keep-it-secret"
+ALGORITHM = "HS256"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Add authentication utilities
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    # Get token from cookies first
+    token = request.cookies.get("Authorization")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Clean token format
+    if token.startswith("Bearer "):
+        token = token[7:]
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_email = payload.get("sub")
+        if not user_email:
+            raise HTTPException(status_code=401, detail="Invalid token format")
+        
+        user = db.query(AdminUser).filter(AdminUser.email == user_email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        # Convert Enum to string for templates
+        user.role = user.role.value
+        return user
+        
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
 @app.get("/")
 async def read_root():
     return RedirectResponse(url="/dashboard")
@@ -98,9 +159,10 @@ async def ping():
     return {"status": "ok"}
 
 @app.get("/users")
-async def users_page(request: Request, db: Session = Depends(get_db)):
+async def users_page(request: Request, db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)):
     users = db.query(User).all()
-    return templates.TemplateResponse("users.html", {"request": request, "users": users})
+    return templates.TemplateResponse("users.html", {"request": request, "users": users, "current_user": current_user})
 
 @app.post("/users")
 async def create_user(
@@ -109,7 +171,8 @@ async def create_user(
     paytype: list[str] = Form(...),
     basic_salary: str = Form(""),
     weekly_salary: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Handle empty salary inputs
     def parse_salary(value: str) -> float:
@@ -134,7 +197,8 @@ async def add_work_page(
     request: Request, 
     db: Session = Depends(get_db),
     page: int = 1,
-    limit: int = 10
+    limit: int = 10, 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Calculate offset
     offset = (page - 1) * limit
@@ -150,7 +214,8 @@ async def add_work_page(
         "current_page": page,
         "total_pages": (total + limit - 1) // limit,
         "limit": limit,
-        "factories": db.query(Factory).all()
+        "factories": db.query(Factory).all(), 
+        "current_user": current_user
     })
 
 @app.post("/add-work")
@@ -164,7 +229,8 @@ async def create_work(
     advance_amount: Optional[str] = Form(None),
     work_date: Optional[str] = Form(None),
     work_description: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
 ):
     def parse_float(value: Optional[str]) -> Optional[float]:
         if value and value.strip():
@@ -220,7 +286,8 @@ async def create_work(
     return RedirectResponse(url="/add-work", status_code=303)
 
 @app.get("/tea-leaves")
-async def tea_leaves_report(request: Request, db: Session = Depends(get_db)):
+async def tea_leaves_report(request: Request, db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)):
     results = db.query(
         Work.work_date,
         User.username,
@@ -236,11 +303,13 @@ async def tea_leaves_report(request: Request, db: Session = Depends(get_db)):
 
     return templates.TemplateResponse("tea_leaves.html", {
         "request": request,
-        "records": results
+        "records": results,
+        "current_user": current_user
     })
 
 @app.get("/other-work")
-async def other_work_report(request: Request, db: Session = Depends(get_db)):
+async def other_work_report(request: Request, db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)):
     results = db.query(
         Work.work_date,
         User.username,
@@ -261,12 +330,14 @@ async def other_work_report(request: Request, db: Session = Depends(get_db)):
 
     return templates.TemplateResponse("other_work.html", {
         "request": request,
-        "records": results
+        "records": results,
+        "current_user": current_user
     })
 
 @app.get("/dashboard")
 async def dashboard(
     request: Request, 
+    current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db),
     year: int = None,
     month: int = None
@@ -385,7 +456,8 @@ async def dashboard(
         "daily_labels": daily_labels,
         "location_datasets": location_datasets,
         "location_labels": location_labels,
-        "location_data": location_data
+        "location_data": location_data,
+        "current_user": current_user
     })
 
 def week_of_month(dt):
@@ -399,7 +471,8 @@ async def salary_report(
     year: int = None,
     month: int = None,
     week: str = None,
-    price_per_kg: float = 48.214
+    price_per_kg: float = 48.214, 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Default to current month/year if not provided
     now = datetime.now()
@@ -531,24 +604,28 @@ async def salary_report(
         "fridays_count": fridays_count,
         "now": now,
         "selected_week": selected_week,
-        "weekly_salary_data": weekly_salary_data
+        "weekly_salary_data": weekly_salary_data,
+        "current_user": current_user
     }
 
     return templates.TemplateResponse("salary.html", context)
 
 @app.get("/factories")
-async def factories_page(request: Request, db: Session = Depends(get_db)):
+async def factories_page(request: Request, db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)):
     factories = db.query(Factory).order_by(Factory.created_at.desc()).all()
     return templates.TemplateResponse("factories.html", {
         "request": request,
-        "factories": factories
+        "factories": factories,
+        "current_user": current_user
     })
 
 @app.post("/factories")
 async def create_factory(
     request: Request,
     name: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     factory = Factory(name=name)
     db.add(factory)
@@ -566,7 +643,8 @@ async def create_factory_tea(
     factory_date: str = Form(...),
     weight_type: str = Form(...),
     leaves_weight: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Parse numeric field
     try:
@@ -598,7 +676,8 @@ async def advances_page(
     request: Request,
     db: Session = Depends(get_db),
     page: int = 1,
-    limit: int = 50
+    limit: int = 50, 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     offset = (page - 1) * limit
     advances = db.query(
@@ -618,7 +697,8 @@ async def advances_page(
         "advances": advances,
         "current_page": page,
         "total_pages": (total + limit - 1) // limit,
-        "limit": limit
+        "limit": limit,
+        "current_user": current_user
     })
 
 @app.get("/generate-pdf")
@@ -627,7 +707,8 @@ async def generate_pdf(
     db: Session = Depends(get_db),
     year: int = None,
     month: int = None,
-    price_per_kg: float = 48.214
+    price_per_kg: float = 48.214, 
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Get the same data as salary report
     salary_report_data = await salary_report(request, db, year, month, price_per_kg)
@@ -656,7 +737,8 @@ async def daily_tea_report(
     request: Request,
     db: Session = Depends(get_db),
     year: int = None,
-    month: int = None
+    month: int = None,
+    current_user: AdminUser = Depends(get_current_user)
 ):
     # Default to current month/year if not provided
     now = datetime.now()
@@ -742,8 +824,209 @@ async def daily_tea_report(
         "total_verified": sum(d['factories'][factory_id]['verified'] for d in daily_data for factory_id in d['factories']),
         "total_unverified": sum(d['factories'][factory_id]['unverified'] for d in daily_data for factory_id in d['factories']),
         "factories": factories,
-        "factory_totals": factory_totals
+        "factory_totals": factory_totals,
+        "current_user": current_user
     })
+
+@app.get("/login")
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(
+    request: Request,
+    username: str = Form(..., alias="email"),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(AdminUser).filter(AdminUser.email == username).first()
+    if not user or not verify_password(password, user.hashed_password):
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Invalid credentials"
+        })
+    
+    access_token = jwt.encode(
+        {"sub": user.email}, SECRET_KEY, algorithm=ALGORITHM
+    )
+    
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(
+        key="Authorization",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=3600,  # 1 hour
+        secure=False,  # Allow in HTTP for development
+        samesite="Lax"  # Enable cookie sending across same-site
+    )
+    return response
+
+@app.get("/logout")
+async def logout():
+    response = RedirectResponse(url="/")
+    response.delete_cookie("Authorization")
+    return response
+
+@app.post("/token")
+async def token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(AdminUser).filter(AdminUser.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+        )
+    
+    access_token = jwt.encode(
+        {"sub": user.email}, SECRET_KEY, algorithm=ALGORITHM
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Allow login page without token
+    print(request.url.path)
+    if request.url.path == "/login":
+        return await call_next(request)
+    
+    # Existing token check
+    token = request.cookies.get("Authorization")
+    if not token:
+        return RedirectResponse(url="/login")
+    
+    response = await call_next(request)
+    return response
+
+@app.get("/revenue")
+async def revenue_report(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    current_user: AdminUser = Depends(get_current_user)
+):
+    # Get selected month/year
+    now = datetime.now()
+    selected_year = year or now.year
+    selected_month = month or now.month
+
+    # Get factory tea data
+    factories = db.query(Factory).all()
+    factory_data = []
+    
+    # Get total tea leaves per factory
+    for factory in factories:
+        tea_data = db.query(
+            func.sum(FactoryTea.leaves_weight).filter(FactoryTea.weight_type == 'verified').label('verified'),
+            func.sum(FactoryTea.leaves_weight).filter(FactoryTea.weight_type == 'unverified').label('unverified')
+        ).filter(
+            FactoryTea.factory_id == factory.id,
+            func.strftime('%Y', FactoryTea.factory_date) == f"{selected_year:04d}",
+            func.strftime('%m', FactoryTea.factory_date) == f"{selected_month:02d}"
+        ).first()
+        
+        factory_data.append({
+            "id": factory.id,
+            "name": factory.name,
+            "verified": tea_data.verified or 0.0,
+            "unverified": tea_data.unverified or 0.0
+        })
+
+    # Calculate total basic salaries for monthly paid users
+    total_basic_salary = db.query(func.sum(User.basic_salary)).filter(
+        User.paytype.like('%monthly%')
+    ).scalar() or 0.0
+
+    # Calculate total tea income (adjusted tea weight * standard price)
+    price_per_kg = 48.214  # Standard tea price
+    total_tea_income = (db.query(func.sum(Work.adjusted_tea_weight)).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}"
+    ).scalar() or 0.0) * price_per_kg
+
+    total_payroll = total_basic_salary
+
+    # Get other work expenses
+    other_work_total = db.query(func.sum(Work.other_cost)).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}"
+    ).scalar() or 0.0
+
+     # Process factory prices
+    total_revenue = 0.0
+    factory_revenues = []
+    
+    form_data = await request.form()
+
+    for factory in factory_data:
+        price_key = f"price_{factory['id']}"
+        price = float(form_data.get(price_key, 200.0))  # Default to 200 if not provided
+        
+        total_tea = factory["verified"] + factory["unverified"]
+        revenue = total_tea * price
+        
+        factory_revenues.append({
+            **factory,
+            "price": price,
+            "revenue": revenue
+        })
+        total_revenue += revenue
+
+    return templates.TemplateResponse("revenue.html", {
+        "request": request,
+        "factory_data": factory_data,
+        "factory_revenues": factory_revenues,  # Initialize empty list
+        "selected_year": selected_year,
+        "selected_month": selected_month,
+        "years": list(range(2020, now.year + 1)),
+        "total_payroll": total_payroll,
+        "total_tea_income": total_tea_income,
+        "other_work_total": other_work_total,
+        "total_revenue": total_revenue,  # Default value
+        "total_profit": total_revenue - total_payroll - total_tea_income - other_work_total,   # Default value
+        "current_user": current_user
+    })
+
+@app.post("/revenue")
+async def calculate_revenue(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    current_user: AdminUser = Depends(get_current_user)
+):
+    # Get form data
+    form_data = await request.form()
+    
+    # Get existing report data
+    report_data = await revenue_report(request, db, year, month)
+    context = report_data.context
+    
+    # Process factory prices
+    total_revenue = 0.0
+    factory_revenues = []
+    
+    for factory in context["factory_data"]:
+        price_key = f"price_{factory['id']}"
+        price = float(form_data.get(price_key, 200.0))  # Default to 200 if not provided
+        
+        total_tea = factory["verified"] + factory["unverified"]
+        revenue = total_tea * price
+        
+        factory_revenues.append({
+            **factory,
+            "price": price,
+            "revenue": revenue
+        })
+        total_revenue += revenue
+
+    # Update context with calculations
+    context.update({
+        "factory_revenues": factory_revenues,
+        "total_revenue": total_revenue,
+        "total_profit": total_revenue - context["total_payroll"] - context["total_tea_income"] - context["other_work_total"]
+    })
+
+    return templates.TemplateResponse("revenue.html", context)
 
 # Add server runner
 if __name__ == "__main__":
