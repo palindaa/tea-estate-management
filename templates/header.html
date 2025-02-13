@@ -1,4 +1,4 @@
-<div x-data="{ open: false }" class="flex justify-between items-center px-6 py-4 relative">
+<div x-data="{ open: false }" class="max-w-7xl mx-auto w-full flex justify-between items-center px-4 sm:px-6 lg:px-8 py-4">
     <!-- Updated logo section -->
     <div class="flex items-center space-x-3">
         <div class="h-8 flex items-center justify-center">
@@ -92,7 +92,7 @@
         <!-- Existing links -->
         <div class="auth-links">
             {% if current_user %}
-                <a href="/logout">Logout</a>
+                <a class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" href="/logout">Logout</a>
                 {% if current_user.role == "admin" %}
                 {% endif %}
             {% else %}
