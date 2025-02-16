@@ -820,7 +820,7 @@ async def daily_tea_report(
         "selected_year": selected_year,
         "selected_month": selected_month,
         "years": list(range(2020, now.year + 1)),
-        "total_adjusted": sum(d['adjusted_tea'] for d in daily_data),
+        "total_adjusted": sum(d['adjusted_tea'] if d['adjusted_tea'] is not None else 0 for d in daily_data),
         "total_verified": sum(d['factories'][factory_id]['verified'] for d in daily_data for factory_id in d['factories']),
         "total_unverified": sum(d['factories'][factory_id]['unverified'] for d in daily_data for factory_id in d['factories']),
         "factories": factories,

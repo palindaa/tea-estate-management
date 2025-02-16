@@ -12,7 +12,7 @@ These factors contribute to declining efficiency and profitability in one of our
 
 ## 🚀 Solution
 LeafTrack provides a modern, management system offering:
-- Real-time crop monitoring & yield prediction
+- Real-time crop monitoring
 - Accountability tracking systems
 - Data-driven decision support
 - Cloud/Local deployment options
