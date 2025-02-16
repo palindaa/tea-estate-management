@@ -84,11 +84,11 @@
                 <div class="mt-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-600 px-4 py-3 sm:px-6">
                     <div class="flex-1 flex justify-between sm:hidden">
                         <!-- Mobile pagination -->
-                        <a href="/tea-leaves?page={{ page-1 if page > 1 else 1 }}" 
+                        <a href="/tea-leaves?page={{ page-1 if page > 1 else 1 }}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}"
                            class="{{ 'cursor-not-allowed opacity-50' if page <= 1 else '' }} relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600">
                             Previous
                         </a>
-                        <a href="/tea-leaves?page={{ page+1 if page < total_pages else total_pages }}"
+                        <a href="/tea-leaves?page={{ page+1 if page < total_pages else total_pages }}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}"
                            class="{{ 'cursor-not-allowed opacity-50' if page >= total_pages else '' }} relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600">
                             Next
                         </a>
@@ -109,7 +109,7 @@
                         <!-- Desktop pagination controls -->
                         <div>
                             <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                <a href="/tea-leaves?page={{ page-1 if page > 1 else 1 }}"
+                                <a href="/tea-leaves?page={{ page-1 if page > 1 else 1 }}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}"
                                    class="{{ 'cursor-not-allowed opacity-50' if page <= 1 else '' }} relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
                                     <span class="sr-only">Previous</span>
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -118,13 +118,13 @@
                                 </a>
                                 
                                 {%- for p in range(max(1, page - 2), min(total_pages + 1, page + 3)) %}
-                                <a href="/tea-leaves?page={{ p }}"
+                                <a href="/tea-leaves?page={{ p }}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}"
                                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium {{ 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200' if p == page else 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200' }} hover:bg-gray-50 dark:border-gray-600">
                                     {{ p }}
                                 </a>
                                 {%- endfor %}
 
-                                <a href="/tea-leaves?page={{ page+1 if page < total_pages else total_pages }}"
+                                <a href="/tea-leaves?page={{ page+1 if page < total_pages else total_pages }}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}"
                                    class="{{ 'cursor-not-allowed opacity-50' if page >= total_pages else '' }} relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
                                     <span class="sr-only">Next</span>
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
