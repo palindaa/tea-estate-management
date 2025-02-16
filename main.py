@@ -293,7 +293,8 @@ async def create_work(
 async def tea_leaves_report(
     request: Request,
     page: int = 1,
-    user_id: Optional[int] = None,  # Add user filter
+    user_id: Optional[str] = None,
+    from_date: Optional[str] = None,  # Add date filter
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -308,9 +309,15 @@ async def tea_leaves_report(
         Work.adjusted_tea_weight
     ).join(User).filter(Work.tea_weight > 0)
     
-    # Apply user filter if provided
-    if user_id:
-        query = query.filter(Work.user_id == user_id)
+    # Apply filters
+    if user_id and user_id != '':
+        query = query.filter(Work.user_id == int(user_id))
+    if from_date:
+        try:
+            date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+            query = query.filter(Work.work_date >= date_obj)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
     
     # Get total count
     total_records = query.count()
@@ -333,14 +340,16 @@ async def tea_leaves_report(
         "total_pages": total_pages,
         "total_records": total_records,
         "users": users,
-        "selected_user_id": user_id
+        "selected_user_id": user_id,
+        "from_date": from_date
     })
 
 @app.get("/other-work")
 async def other_work_report(
     request: Request,
     page: int = 1,
-    user_id: Optional[int] = None,  # Add user filter
+    user_id: Optional[str] = None,
+    from_date: Optional[str] = None,  # Add date filter
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -355,16 +364,28 @@ async def other_work_report(
         func.sum(Work.other_cost).label('total_cost')
     ).join(User).filter(Work.other_cost > 0)
     
-    # Apply user filter if provided
-    if user_id:
-        query = query.filter(Work.user_id == user_id)
+    # Apply filters
+    if user_id and user_id != '':
+        query = query.filter(Work.user_id == int(user_id))
+    if from_date:
+        try:
+            date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+            query = query.filter(Work.work_date >= date_obj)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
     
     # Get total count (need to count before grouping)
-    total_records = db.query(Work).join(User).filter(
-        Work.other_cost > 0,
-        *([Work.user_id == user_id] if user_id else [])
-    ).count()
+    count_query = db.query(Work).join(User).filter(Work.other_cost > 0)
+    if user_id:
+        count_query = count_query.filter(Work.user_id == user_id)
+    if from_date:
+        try:
+            date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+            count_query = count_query.filter(Work.work_date >= date_obj)
+        except ValueError:
+            pass
     
+    total_records = count_query.count()
     total_pages = (total_records + per_page - 1) // per_page
     
     # Complete the query with group by and pagination
@@ -389,7 +410,8 @@ async def other_work_report(
         "total_pages": total_pages,
         "total_records": total_records,
         "users": users,
-        "selected_user_id": user_id
+        "selected_user_id": user_id,
+        "from_date": from_date
     })
 
 @app.get("/dashboard")
@@ -733,7 +755,8 @@ async def create_factory_tea(
 async def advances_page(
     request: Request,
     page: int = 1,
-    user_id: Optional[int] = None,  # Add user filter
+    user_id: Optional[str] = None,
+    from_date: Optional[str] = None,  # Add date filter
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -746,9 +769,15 @@ async def advances_page(
         Work.advance_amount
     ).join(User).filter(Work.advance_amount > 0)
     
-    # Apply user filter if provided
-    if user_id:
-        query = query.filter(Work.user_id == user_id)
+    # Apply filters
+    if user_id and user_id != '':
+        query = query.filter(Work.user_id == int(user_id))
+    if from_date:
+        try:
+            date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+            query = query.filter(Work.work_date >= date_obj)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
     
     # Get total count
     total_records = query.count()
@@ -771,7 +800,8 @@ async def advances_page(
         "total_pages": total_pages,
         "total_records": total_records,
         "users": users,
-        "selected_user_id": user_id
+        "selected_user_id": user_id,
+        "from_date": from_date
     })
 
 @app.get("/generate-pdf")
