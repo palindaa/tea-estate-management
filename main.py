@@ -100,11 +100,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Configure templates
 templates = Jinja2Templates(directory="templates")
 
-# Add custom Jinja filters
+# Add custom Jinja filters and globals
 def format_commas(value):
     return "{:,.0f}".format(float(value)) if float(value) % 1 == 0 else "{:,.2f}".format(float(value))
 
 templates.env.filters["thousands_commas"] = format_commas
+templates.env.globals.update({
+    "min": min,  # Add the min function to template globals
+    "max": max   # Also add max since we're using it in the template
+})
 
 # Replace Flask-Login initialization with
 SECRET_KEY = "your-secret-key-keep-it-secret"
@@ -286,30 +290,59 @@ async def create_work(
     return RedirectResponse(url="/add-work", status_code=303)
 
 @app.get("/tea-leaves")
-async def tea_leaves_report(request: Request, db: Session = Depends(get_db), 
-    current_user: AdminUser = Depends(get_current_user)):
-    results = db.query(
+async def tea_leaves_report(
+    request: Request,
+    page: int = 1,  # Changed from request.args.get to a direct parameter
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
+):
+    per_page = 10  # Number of records per page
+    
+    # Get total count of records
+    total_records = db.query(Work).filter(Work.tea_weight > 0).count()
+    
+    # Calculate total pages
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Get paginated records
+    records = db.query(
         Work.work_date,
         User.username,
         Work.tea_location,
         Work.tea_weight,
-        Work.adjusted_tea_weight,
+        Work.adjusted_tea_weight
     ).join(User).filter(
         Work.tea_weight > 0
     ).order_by(
-        Work.work_date.desc(),
-        User.username
-    ).all()
+        Work.work_date.desc()
+    ).offset((page - 1) * per_page).limit(per_page).all()
 
     return templates.TemplateResponse("tea_leaves.html", {
         "request": request,
-        "records": results,
-        "current_user": current_user
+        "records": records,
+        "current_user": current_user,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total_records": total_records
     })
 
 @app.get("/other-work")
-async def other_work_report(request: Request, db: Session = Depends(get_db), 
-    current_user: AdminUser = Depends(get_current_user)):
+async def other_work_report(
+    request: Request,
+    page: int = 1,
+    db: Session = Depends(get_db), 
+    current_user: AdminUser = Depends(get_current_user)
+):
+    per_page = 10  # Number of records per page
+    
+    # Get total count of records
+    total_records = db.query(Work).filter(Work.other_cost > 0).count()
+    
+    # Calculate total pages
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Get paginated records
     results = db.query(
         Work.work_date,
         User.username,
@@ -326,12 +359,16 @@ async def other_work_report(request: Request, db: Session = Depends(get_db),
     ).order_by(
         Work.work_date.desc(),
         User.username
-    ).all()
+    ).offset((page - 1) * per_page).limit(per_page).all()
 
     return templates.TemplateResponse("other_work.html", {
         "request": request,
         "records": results,
-        "current_user": current_user
+        "current_user": current_user,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total_records": total_records
     })
 
 @app.get("/dashboard")
@@ -674,12 +711,19 @@ async def create_factory_tea(
 @app.get("/advances")
 async def advances_page(
     request: Request,
-    db: Session = Depends(get_db),
     page: int = 1,
-    limit: int = 50, 
+    db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
-    offset = (page - 1) * limit
+    per_page = 10  # Number of records per page
+    
+    # Get total count of records
+    total_records = db.query(Work).filter(Work.advance_amount > 0).count()
+    
+    # Calculate total pages
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Get paginated records
     advances = db.query(
         User.username,
         Work.work_date,
@@ -688,17 +732,16 @@ async def advances_page(
         Work.advance_amount > 0
     ).order_by(
         Work.work_date.desc()
-    ).offset(offset).limit(limit).all()
-
-    total = db.query(Work).filter(Work.advance_amount > 0).count()
+    ).offset((page - 1) * per_page).limit(per_page).all()
 
     return templates.TemplateResponse("advances.html", {
         "request": request,
         "advances": advances,
-        "current_page": page,
-        "total_pages": (total + limit - 1) // limit,
-        "limit": limit,
-        "current_user": current_user
+        "current_user": current_user,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total_records": total_records
     })
 
 @app.get("/generate-pdf")
