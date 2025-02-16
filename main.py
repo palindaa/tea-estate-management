@@ -292,30 +292,37 @@ async def create_work(
 @app.get("/tea-leaves")
 async def tea_leaves_report(
     request: Request,
-    page: int = 1,  # Changed from request.args.get to a direct parameter
+    page: int = 1,
+    user_id: Optional[int] = None,  # Add user filter
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
-    per_page = 10  # Number of records per page
+    per_page = 10
     
-    # Get total count of records
-    total_records = db.query(Work).filter(Work.tea_weight > 0).count()
-    
-    # Calculate total pages
-    total_pages = (total_records + per_page - 1) // per_page
-    
-    # Get paginated records
-    records = db.query(
+    # Base query
+    query = db.query(
         Work.work_date,
         User.username,
         Work.tea_location,
         Work.tea_weight,
         Work.adjusted_tea_weight
-    ).join(User).filter(
-        Work.tea_weight > 0
-    ).order_by(
+    ).join(User).filter(Work.tea_weight > 0)
+    
+    # Apply user filter if provided
+    if user_id:
+        query = query.filter(Work.user_id == user_id)
+    
+    # Get total count
+    total_records = query.count()
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Get paginated records
+    records = query.order_by(
         Work.work_date.desc()
     ).offset((page - 1) * per_page).limit(per_page).all()
+    
+    # Get all users for filter dropdown
+    users = db.query(User).order_by(User.username).all()
 
     return templates.TemplateResponse("tea_leaves.html", {
         "request": request,
@@ -324,42 +331,54 @@ async def tea_leaves_report(
         "page": page,
         "per_page": per_page,
         "total_pages": total_pages,
-        "total_records": total_records
+        "total_records": total_records,
+        "users": users,
+        "selected_user_id": user_id
     })
 
 @app.get("/other-work")
 async def other_work_report(
     request: Request,
     page: int = 1,
-    db: Session = Depends(get_db), 
+    user_id: Optional[int] = None,  # Add user filter
+    db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
-    per_page = 10  # Number of records per page
+    per_page = 10
     
-    # Get total count of records
-    total_records = db.query(Work).filter(Work.other_cost > 0).count()
-    
-    # Calculate total pages
-    total_pages = (total_records + per_page - 1) // per_page
-    
-    # Get paginated records
-    results = db.query(
+    # Base query
+    query = db.query(
         Work.work_date,
         User.username,
         Work.other_location,
         Work.work_description,
         func.sum(Work.other_cost).label('total_cost')
-    ).join(User).filter(
-        Work.other_cost > 0
-    ).group_by(
+    ).join(User).filter(Work.other_cost > 0)
+    
+    # Apply user filter if provided
+    if user_id:
+        query = query.filter(Work.user_id == user_id)
+    
+    # Get total count (need to count before grouping)
+    total_records = db.query(Work).join(User).filter(
+        Work.other_cost > 0,
+        *([Work.user_id == user_id] if user_id else [])
+    ).count()
+    
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Complete the query with group by and pagination
+    results = query.group_by(
         Work.user_id,
         Work.work_date,
         Work.other_location,
         Work.work_description
     ).order_by(
-        Work.work_date.desc(),
-        User.username
+        Work.work_date.desc()
     ).offset((page - 1) * per_page).limit(per_page).all()
+    
+    # Get all users for filter dropdown
+    users = db.query(User).order_by(User.username).all()
 
     return templates.TemplateResponse("other_work.html", {
         "request": request,
@@ -368,7 +387,9 @@ async def other_work_report(
         "page": page,
         "per_page": per_page,
         "total_pages": total_pages,
-        "total_records": total_records
+        "total_records": total_records,
+        "users": users,
+        "selected_user_id": user_id
     })
 
 @app.get("/dashboard")
@@ -712,27 +733,34 @@ async def create_factory_tea(
 async def advances_page(
     request: Request,
     page: int = 1,
+    user_id: Optional[int] = None,  # Add user filter
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
-    per_page = 10  # Number of records per page
+    per_page = 10
     
-    # Get total count of records
-    total_records = db.query(Work).filter(Work.advance_amount > 0).count()
-    
-    # Calculate total pages
-    total_pages = (total_records + per_page - 1) // per_page
-    
-    # Get paginated records
-    advances = db.query(
+    # Base query
+    query = db.query(
         User.username,
         Work.work_date,
         Work.advance_amount
-    ).join(User).filter(
-        Work.advance_amount > 0
-    ).order_by(
+    ).join(User).filter(Work.advance_amount > 0)
+    
+    # Apply user filter if provided
+    if user_id:
+        query = query.filter(Work.user_id == user_id)
+    
+    # Get total count
+    total_records = query.count()
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # Get paginated records
+    advances = query.order_by(
         Work.work_date.desc()
     ).offset((page - 1) * per_page).limit(per_page).all()
+    
+    # Get all users for filter dropdown
+    users = db.query(User).order_by(User.username).all()
 
     return templates.TemplateResponse("advances.html", {
         "request": request,
@@ -741,7 +769,9 @@ async def advances_page(
         "page": page,
         "per_page": per_page,
         "total_pages": total_pages,
-        "total_records": total_records
+        "total_records": total_records,
+        "users": users,
+        "selected_user_id": user_id
     })
 
 @app.get("/generate-pdf")
