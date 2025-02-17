@@ -55,6 +55,19 @@
         <a href="/users" class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
     </nav>
 
+    <nav>
+        <!-- Existing links -->
+        <div class="auth-links">
+            {% if current_user %}
+                <a class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" href="/logout">Logout</a>
+                {% if current_user.role == "admin" %}
+                {% endif %}
+            {% else %}
+                <a href="/login">Login</a>
+            {% endif %}
+        </div>
+    </nav>
+
     <!-- Mobile menu button -->
     <button @click="open = !open" class="md:hidden text-gray-700 dark:text-gray-300">
         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -87,17 +100,4 @@
             <a href="/users" class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Users</a>
         </div>
     </div>
-
-    <nav>
-        <!-- Existing links -->
-        <div class="auth-links">
-            {% if current_user %}
-                <a class="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" href="/logout">Logout</a>
-                {% if current_user.role == "admin" %}
-                {% endif %}
-            {% else %}
-                <a href="/login">Login</a>
-            {% endif %}
-        </div>
-    </nav>
 </div> 
