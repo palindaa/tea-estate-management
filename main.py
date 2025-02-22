@@ -522,6 +522,19 @@ async def dashboard(
     location_labels = [loc.tea_location or 'Unknown' for loc in location_totals]
     location_data = [float(loc.total_weight) for loc in location_totals]
 
+    # Get work cost totals by location
+    work_cost_totals = db.query(
+        Work.other_location,
+        func.sum(Work.other_cost).label('total_cost')
+    ).filter(
+        func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+        func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+        Work.other_cost > 0
+    ).group_by(Work.other_location).all()
+
+    # Prepare work cost data for the chart
+    work_cost_data = [float(loc.total_cost) for loc in work_cost_totals]
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "monthly_total": monthly_total,
@@ -537,6 +550,7 @@ async def dashboard(
         "location_datasets": location_datasets,
         "location_labels": location_labels,
         "location_data": location_data,
+        "work_cost_data": work_cost_data,
         "current_user": current_user
     })
 

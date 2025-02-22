@@ -142,16 +142,6 @@
                     </div>
                 </div>
 
-                <!-- Add before the contribution distribution chart -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-                    <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
-                        Last 30 Days Tea Production
-                    </h3>
-                    <div class="relative h-96">
-                        <canvas id="dailyChart"></canvas>
-                    </div>
-                </div>
-
                 <!-- Add after the Factory Tea Statistics card -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
                     <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
@@ -162,6 +152,25 @@
                     </div>
                 </div>
 
+                <!-- Add after the Tea Production by Location chart -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+                    <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
+                        Other Work Cost by Location
+                    </h3>
+                    <div class="relative h-96">
+                        <canvas id="workCostChart"></canvas>
+                    </div>
+                </div>
+
+                 <!-- Add before the contribution distribution chart -->
+                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+                    <h3 class="text-lg font-semibold text-gray-500 dark:text-gray-300 mb-4">
+                        Last 30 Days Tea Production
+                    </h3>
+                    <div class="relative h-96">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -317,6 +326,68 @@
                                     ? (context.raw / total * 100).toFixed(1) + '%'
                                     : '0%';
                                 return ` ${context.dataset.label}: ${context.formattedValue} kg (${percentage})`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Work Cost Bar Chart
+        const workCostCtx = document.getElementById('workCostChart').getContext('2d');
+        new Chart(workCostCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ location_labels|safe }},
+                datasets: [{
+                    label: 'Total Work Cost',
+                    data: {{ work_cost_data|safe }},
+                    backgroundColor: [
+                        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                        '#EC4899', '#14B8A6', '#F97316', '#64748B', '#A855F7'
+                    ].slice(0, {{ location_data|length }}),
+                    borderColor: [
+                        '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED',
+                        '#DB2777', '#0F766E', '#EA580C', '#475569', '#9333EA'
+                    ].slice(0, {{ location_data|length }}),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#E5E7EB' : '#6B7280',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#374151' : '#E5E7EB'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#E5E7EB' : '#6B7280',
+                            callback: function(value) {
+                                return value.toLocaleString();
+                            }
+                        },
+                        grid: {
+                            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#374151' : '#E5E7EB'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ` ${context.dataset.label}: ${context.formattedValue}`;
                             }
                         }
                     }
