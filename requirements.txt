@@ -2,7 +2,7 @@ fastapi
 uvicorn
 jinja2
 sqlalchemy
-xhtml2pdf
+pyppeteer
 python-jose==3.3.0
 passlib==1.7.4
 python-multipart

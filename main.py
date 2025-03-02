@@ -12,7 +12,6 @@ from fastapi import HTTPException
 from datetime import datetime, date, timedelta
 from sqlalchemy.exc import IntegrityError
 from calendar import monthcalendar
-from xhtml2pdf import pisa
 from fastapi.responses import StreamingResponse
 import io
 from collections import defaultdict
@@ -20,6 +19,9 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from enum import Enum
+import pyppeteer
+import asyncio
+import os
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
@@ -630,6 +632,17 @@ async def salary_report(
             Work.other_cost > 0
         ).scalar() or 0
 
+        # Count extra work days
+        aththam_days = db.query(
+            func.count(func.distinct(Work.work_date))
+        ).filter(
+            Work.user_id == user.id,
+            Work.work_description.startswith('Aththa'),
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            Work.other_cost > 0
+        ).scalar() or 0
+
         # Calculate values
         tea_income = tea_total * price_per_kg
         total_salary = tea_income + other_total
@@ -651,7 +664,8 @@ async def salary_report(
             "balance": balance,
             "adjusted_basic": adjusted_basic,
             "tea_days": tea_days,
-            "extra_days": extra_days
+            "extra_days": extra_days,
+            "aththam_days": aththam_days
         })
 
     # Process weekly employees with week filter
@@ -833,39 +847,121 @@ async def generate_pdf(
     
     # Add current datetime to context
     context["now"] = datetime.now()
+    
+    # Render HTML template
+    html_content = templates.get_template("salary_pdf_sinhala.html").render(context)
+    
+    # Create a temporary file for the HTML content
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_html_path = os.path.join(temp_dir, "temp_salary.html")
+    temp_pdf_path = os.path.join(temp_dir, "temp_salary.pdf")
+    
+    with open(temp_html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
 
-    font_path = "./static/fonts/NotoSansSinhala-Regular.ttf"
-    
-    # Pass font path in context
-    context["font_path"] = font_path
-    
-    # Render PDF template
-    pdf_html = templates.get_template("salary_pdf_sinhala.html").render(context)
+    # Create a temporary file path for the PDF
+    try:
+        # Launch browser with more robust options
+        browser = await pyppeteer.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+                '--font-render-hinting=none'
+            ],
+            handleSIGINT=False,
+            handleSIGTERM=False,
+            handleSIGHUP=False,
+            ignoreHTTPSErrors=True
+        )
 
-    pdf_html = pdf_html.encode('utf-8')
-    # Create PDF with proper font handling
-    pdf = io.BytesIO()
-    
-    # Function to handle font loading
-    def fetch_resources(uri, rel):
-        if uri.endswith(".ttf"):
-            return font_path
-        return uri
-    
-    # Create PDF with proper font handling
-    pisa.CreatePDF(
-        pdf_html,
-        dest=pdf,
-        encoding='utf-8',
-        link_callback=fetch_resources
-    )
-    pdf.seek(0)
-    
-    return StreamingResponse(
-        pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=salary_report_{year}_{month}.pdf"}
-    )
+        # Create a new page with a longer timeout
+        page = await browser.newPage()
+        
+        # Set viewport and load HTML file
+        await page.setViewport({'width': 1024, 'height': 768})
+        
+        # Load the HTML file with a longer timeout
+        try:
+            await page.goto(
+                f'file://{os.path.abspath(temp_html_path)}',
+                waitUntil=['networkidle0', 'load'],
+                timeout=30000
+            )
+        except Exception as e:
+            print(f"Page load error: {str(e)}")
+            raise
+
+        # Wait for fonts to load and content to render
+        try:
+            # Use evaluate to create a delay instead of waitForTimeout
+            await page.evaluate('() => new Promise(resolve => setTimeout(resolve, 2000))')
+        except Exception as e:
+            print(f"Timeout error: {str(e)}")
+            raise
+
+        # Generate PDF with more specific options
+        try:
+            await page.pdf({
+                'path': temp_pdf_path,
+                'format': 'A4',
+                'printBackground': True,
+                'margin': {'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'},
+                'preferCSSPageSize': True
+            })
+        except Exception as e:
+            print(f"PDF generation error: {str(e)}")
+            raise
+
+        # Close browser properly
+        try:
+            await browser.close()
+        except Exception as e:
+            print(f"Browser close error: {str(e)}")
+
+        # Read the generated PDF
+        try:
+            with open(temp_pdf_path, "rb") as f:
+                pdf_content = f.read()
+        except Exception as e:
+            print(f"PDF read error: {str(e)}")
+            raise
+
+        # Clean up temporary files
+        try:
+            if os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+            if os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
+        except Exception as e:
+            print(f"Cleanup error: {str(e)}")
+
+        # Return the PDF as a streaming response
+        return StreamingResponse(
+            io.BytesIO(pdf_content),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=salary_report_{year}_{month}.pdf"}
+        )
+
+    except Exception as e:
+        # Enhanced error handling
+        error_message = f"PDF generation failed: {str(e)}"
+        print(error_message)
+        
+        # Clean up temporary files in case of error
+        try:
+            if os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+            if os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
+        except Exception as cleanup_error:
+            print(f"Cleanup error during exception handling: {str(cleanup_error)}")
+        
+        raise HTTPException(status_code=500, detail=error_message)
 
 @app.get("/daily-tea")
 async def daily_tea_report(
