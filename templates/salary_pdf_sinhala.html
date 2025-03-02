@@ -1,28 +1,25 @@
 <!DOCTYPE html>
-<html>
+<html lang="si">
 <head>
-    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="UTF-8">
+    <title>මාසික වැටුප් වාර්තාව</title>
     <style>
         @font-face {
             font-family: 'SinhalaFont';
-            src: url('/absolute/path/to/static/fonts/FMAbhaya.ttf') format('truetype');
+            src: url('static/fonts/NotoSansSinhala-Regular.ttf') format('truetype');
         }
         body {
             font-family: 'SinhalaFont', sans-serif;
             font-size: 12px;
         }
-        th {
-            font-family: 'SinhalaFont', sans-serif;
-        }
-        
         h1, h2 {
             color: #2c5282;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            margin-bottom: 20px;
+            margin: 10px 0 20px;
         }
         th, td {
             border: 1px solid #ddd;
@@ -74,7 +71,7 @@
                     <td>{{ "%.2f"|format(data.other_income) }}</td>
                 </tr>
                 <tr>
-                    <th>මුළු වැඩ</th>
+                    <th>මුළු වැටුප</th>
                     <td>{{ "%.2f"|format(data.total_salary)|thousands_commas }}</td>
                 </tr>
                 <tr>
