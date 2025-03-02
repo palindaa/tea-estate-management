@@ -5,11 +5,13 @@
     <style>
         body { font-family: Helvetica; font-size: 12px; }
         h1 { color: #2c5282; font-size: 18px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        h2 { color: #2c5282; font-size: 16px; margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #2c5282; color: white; }
+        th { background-color: #2c5282; color: white; width: 30%; }
         .header { text-align: center; margin-bottom: 20px; }
         .total { font-weight: bold; }
+        .user-section { margin-bottom: 30px; }
     </style>
 </head>
 <body>
@@ -18,38 +20,51 @@
         <p>Generated on: {{ now.strftime('%Y-%m-%d %H:%M') }}</p>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>User</th>
-                <th>Salary</th>
-                <th>Tea Weight (kg)</th>
-                <th>Tea Income</th>
-                <th>Extra Work</th>
-                <th>Total Work</th>
-                <th>Advance</th>
-                <th>Balance</th>
-                <th>Tea Days</th>
-                <th>Work Days</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for data in salary_data if 'Monthly' in data.user.paytype %}
-            <tr>
-                <td>{{ data.user.username }}</td>
-                <td>{{ data.adjusted_basic | thousands_commas }}</td>
-                <td>{{ "%.2f"|format(data.tea_weight) }}</td>
-                <td>{{ "%.2f"|format(data.tea_income) }}</td>
-                <td>{{ "%.2f"|format(data.other_income) }}</td>
-                <td>{{ "%.2f"|format(data.total_salary)|thousands_commas }}</td>
-                <td>{{ "%.2f"|format(data.advance) }}</td>
-                <td>{{ data.balance | thousands_commas }}</td>
-                <td>{{ data.tea_days }}</td>
-                <td>{{ data.extra_days }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% for data in salary_data if 'Monthly' in data.user.paytype %}
+    <div class="user-section">
+        <h2>{{ data.user.username }}</h2>
+        <table>
+            <tbody>
+                <tr>
+                    <th>Salary</th>
+                    <td>{{ data.adjusted_basic | thousands_commas }}</td>
+                </tr>
+                <tr>
+                    <th>Tea Weight (kg)</th>
+                    <td>{{ "%.2f"|format(data.tea_weight) }}</td>
+                </tr>
+                <tr>
+                    <th>Tea Income</th>
+                    <td>{{ "%.2f"|format(data.tea_income) }}</td>
+                </tr>
+                <tr>
+                    <th>Extra Work</th>
+                    <td>{{ "%.2f"|format(data.other_income) }}</td>
+                </tr>
+                <tr>
+                    <th>Total Work</th>
+                    <td>{{ "%.2f"|format(data.total_salary)|thousands_commas }}</td>
+                </tr>
+                <tr>
+                    <th>Advance</th>
+                    <td>{{ "%.2f"|format(data.advance) }}</td>
+                </tr>
+                <tr>
+                    <th>Balance</th>
+                    <td>{{ data.balance | thousands_commas }}</td>
+                </tr>
+                <tr>
+                    <th>Tea Days</th>
+                    <td>{{ data.tea_days }}</td>
+                </tr>
+                <tr>
+                    <th>Work Days</th>
+                    <td>{{ data.extra_days }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
 
     <!-- Add Sinhala section after English section -->
     <!-- <div style="page-break-before: always;">
@@ -58,38 +73,51 @@
             <p style="font-family: 'Noto Sans Sinhala', sans-serif;">ජනනය කළ දිනය: {{ now.strftime('%Y-%m-%d %H:%M') }}</p>
         </div>
 
-        <table style="font-family: 'Noto Sans Sinhala', sans-serif;">
-            <thead>
-                <tr>
-                    <th>නම</th>
-                    <th>වැටුප</th>
-                    <th>තේ බර (කි.ග්රෑ.)</th>
-                    <th>තේ ආදායම</th>
-                    <th>අමතර වැඩ</th>
-                    <th>මුළු වැඩ</th>
-                    <th>අත්තිකාරම්</th>
-                    <th>ශේෂය</th>
-                    <th>තේ දින</th>
-                    <th>වැඩ දින</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for data in salary_data if 'Monthly' in data.user.paytype %}
-                <tr>
-                    <td>{{ data.user.username }}</td>
-                    <td>{{ data.adjusted_basic | thousands_commas }}</td>
-                    <td>{{ "%.2f"|format(data.tea_weight) }}</td>
-                    <td>{{ "%.2f"|format(data.tea_income) }}</td>
-                    <td>{{ "%.2f"|format(data.other_income) }}</td>
-                    <td>{{ "%.2f"|format(data.total_salary)|thousands_commas }}</td>
-                    <td>{{ "%.2f"|format(data.advance) }}</td>
-                    <td>{{ data.balance | thousands_commas }}</td>
-                    <td>{{ data.tea_days }}</td>
-                    <td>{{ data.extra_days }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% for data in salary_data if 'Monthly' in data.user.paytype %}
+        <div class="user-section">
+            <h2 style="font-family: 'Noto Sans Sinhala', sans-serif;">{{ data.user.username }}</h2>
+            <table style="font-family: 'Noto Sans Sinhala', sans-serif;">
+                <tbody>
+                    <tr>
+                        <th>වැටුප</th>
+                        <td>{{ data.adjusted_basic | thousands_commas }}</td>
+                    </tr>
+                    <tr>
+                        <th>තේ බර (කි.ග්රෑ.)</th>
+                        <td>{{ "%.2f"|format(data.tea_weight) }}</td>
+                    </tr>
+                    <tr>
+                        <th>තේ ආදායම</th>
+                        <td>{{ "%.2f"|format(data.tea_income) }}</td>
+                    </tr>
+                    <tr>
+                        <th>අමතර වැඩ</th>
+                        <td>{{ "%.2f"|format(data.other_income) }}</td>
+                    </tr>
+                    <tr>
+                        <th>මුළු වැඩ</th>
+                        <td>{{ "%.2f"|format(data.total_salary)|thousands_commas }}</td>
+                    </tr>
+                    <tr>
+                        <th>අත්තිකාරම්</th>
+                        <td>{{ "%.2f"|format(data.advance) }}</td>
+                    </tr>
+                    <tr>
+                        <th>ශේෂය</th>
+                        <td>{{ data.balance | thousands_commas }}</td>
+                    </tr>
+                    <tr>
+                        <th>තේ දින</th>
+                        <td>{{ data.tea_days }}</td>
+                    </tr>
+                    <tr>
+                        <th>වැඩ දින</th>
+                        <td>{{ data.extra_days }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
     </div> -->
 </body>
 </html> 

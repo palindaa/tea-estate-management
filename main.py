@@ -833,14 +833,32 @@ async def generate_pdf(
     
     # Add current datetime to context
     context["now"] = datetime.now()
+
+    font_path = "./static/fonts/NotoSansSinhala-Regular.ttf"
+    
+    # Pass font path in context
+    context["font_path"] = font_path
     
     # Render PDF template
-    pdf_html = templates.get_template("salary_pdf.html").render(context)
+    pdf_html = templates.get_template("salary_pdf_sinhala.html").render(context)
 
-    
-    # Create PDF
+    pdf_html = pdf_html.encode('utf-8')
+    # Create PDF with proper font handling
     pdf = io.BytesIO()
-    pisa.CreatePDF(pdf_html, dest=pdf)
+    
+    # Function to handle font loading
+    def fetch_resources(uri, rel):
+        if uri.endswith(".ttf"):
+            return font_path
+        return uri
+    
+    # Create PDF with proper font handling
+    pisa.CreatePDF(
+        pdf_html,
+        dest=pdf,
+        encoding='utf-8',
+        link_callback=fetch_resources
+    )
     pdf.seek(0)
     
     return StreamingResponse(
