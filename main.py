@@ -20,6 +20,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from enum import Enum
+from weasyprint import HTML, CSS
+from weasyprint.text.fonts import FontConfiguration
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
@@ -833,36 +835,32 @@ async def generate_pdf(
     
     # Add current datetime to context
     context["now"] = datetime.now()
-
-    font_path = "./static/fonts/NotoSansSinhala-Regular.ttf"
-    
-    # Pass font path in context
-    context["font_path"] = font_path
     
     # Render PDF template
     pdf_html = templates.get_template("salary_pdf_sinhala.html").render(context)
-
-    pdf_html = pdf_html.encode('utf-8')
-    # Create PDF with proper font handling
-    pdf = io.BytesIO()
     
-    # Function to handle font loading
-    def fetch_resources(uri, rel):
-        if uri.endswith(".ttf"):
-            return font_path
-        return uri
+    # Create PDF using WeasyPrint
+    from weasyprint import HTML, CSS
+    from weasyprint.text.fonts import FontConfiguration
     
-    # Create PDF with proper font handling
-    pisa.CreatePDF(
-        pdf_html,
-        dest=pdf,
-        encoding='utf-8',
-        link_callback=fetch_resources
+    # Configure font
+    font_config = FontConfiguration()
+    css = CSS(string='''
+        @font-face {
+            font-family: 'SinhalaFont';
+            src: url('static/fonts/NotoSansSinhala-Regular.ttf') format('truetype');
+        }
+    ''', font_config=font_config)
+    
+    # Create PDF
+    html = HTML(string=pdf_html, base_url=str(request.base_url))
+    pdf = html.write_pdf(
+        stylesheets=[css],
+        font_config=font_config
     )
-    pdf.seek(0)
     
     return StreamingResponse(
-        pdf,
+        io.BytesIO(pdf),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=salary_report_{year}_{month}.pdf"}
     )
