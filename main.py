@@ -841,27 +841,30 @@ async def generate_pdf(
     price_per_kg: float = 48.214, 
     current_user: AdminUser = Depends(get_current_user)
 ):
-    # Get the same data as salary report
-    salary_report_data = await salary_report(request, db, year, month, price_per_kg)
-    context = salary_report_data.context
-    
-    # Add current datetime to context
-    context["now"] = datetime.now()
-    
-    # Render HTML template
-    html_content = templates.get_template("salary_pdf_sinhala.html").render(context)
-    
-    # Create a temporary file for the HTML content
-    temp_dir = "temp"
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_html_path = os.path.join(temp_dir, "temp_salary.html")
-    temp_pdf_path = os.path.join(temp_dir, "temp_salary.pdf")
-    
-    with open(temp_html_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    browser = None
+    temp_html_path = None
+    temp_pdf_path = None
 
-    # Create a temporary file path for the PDF
     try:
+        # Get the same data as salary report
+        salary_report_data = await salary_report(request, db, year, month, price_per_kg)
+        context = salary_report_data.context
+        
+        # Add current datetime to context
+        context["now"] = datetime.now()
+        
+        # Render HTML template
+        html_content = templates.get_template("salary_pdf_sinhala.html").render(context)
+        
+        # Create a temporary file for the HTML content
+        temp_dir = "temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_html_path = os.path.join(temp_dir, "temp_salary.html")
+        temp_pdf_path = os.path.join(temp_dir, "temp_salary.pdf")
+        
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
         # Launch browser with more robust options
         browser = await pyppeteer.launch(
             headless=True,
@@ -886,59 +889,27 @@ async def generate_pdf(
         await page.setViewport({'width': 1024, 'height': 768})
         
         # Load the HTML file with a longer timeout
-        try:
-            await page.goto(
-                f'file://{os.path.abspath(temp_html_path)}',
-                waitUntil=['networkidle0', 'load'],
-                timeout=30000
-            )
-        except Exception as e:
-            print(f"Page load error: {str(e)}")
-            raise
+        await page.goto(
+            f'file://{os.path.abspath(temp_html_path)}',
+            waitUntil=['networkidle0', 'load'],
+            timeout=300000
+        )
 
         # Wait for fonts to load and content to render
-        try:
-            # Use evaluate to create a delay instead of waitForTimeout
-            await page.evaluate('() => new Promise(resolve => setTimeout(resolve, 2000))')
-        except Exception as e:
-            print(f"Timeout error: {str(e)}")
-            raise
+        await page.evaluate('() => new Promise(resolve => setTimeout(resolve, 20000))')
 
         # Generate PDF with more specific options
-        try:
-            await page.pdf({
-                'path': temp_pdf_path,
-                'format': 'A4',
-                'printBackground': True,
-                'margin': {'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'},
-                'preferCSSPageSize': True
-            })
-        except Exception as e:
-            print(f"PDF generation error: {str(e)}")
-            raise
-
-        # Close browser properly
-        try:
-            await browser.close()
-        except Exception as e:
-            print(f"Browser close error: {str(e)}")
+        await page.pdf({
+            'path': temp_pdf_path,
+            'format': 'A4',
+            'printBackground': True,
+            'margin': {'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'},
+            'preferCSSPageSize': True
+        })
 
         # Read the generated PDF
-        try:
-            with open(temp_pdf_path, "rb") as f:
-                pdf_content = f.read()
-        except Exception as e:
-            print(f"PDF read error: {str(e)}")
-            raise
-
-        # Clean up temporary files
-        try:
-            if os.path.exists(temp_html_path):
-                os.remove(temp_html_path)
-            if os.path.exists(temp_pdf_path):
-                os.remove(temp_pdf_path)
-        except Exception as e:
-            print(f"Cleanup error: {str(e)}")
+        with open(temp_pdf_path, "rb") as f:
+            pdf_content = f.read()
 
         # Return the PDF as a streaming response
         return StreamingResponse(
@@ -948,20 +919,26 @@ async def generate_pdf(
         )
 
     except Exception as e:
-        # Enhanced error handling
         error_message = f"PDF generation failed: {str(e)}"
         print(error_message)
-        
-        # Clean up temporary files in case of error
-        try:
-            if os.path.exists(temp_html_path):
-                os.remove(temp_html_path)
-            if os.path.exists(temp_pdf_path):
-                os.remove(temp_pdf_path)
-        except Exception as cleanup_error:
-            print(f"Cleanup error during exception handling: {str(cleanup_error)}")
-        
         raise HTTPException(status_code=500, detail=error_message)
+
+    finally:
+        # Clean up resources in finally block
+        if browser:
+            try:
+                await browser.close()
+            except Exception as e:
+                print(f"Browser cleanup error: {str(e)}")
+
+        # Clean up temporary files
+        try:
+            if temp_html_path and os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
+        except Exception as e:
+            print(f"File cleanup error: {str(e)}")
 
 @app.get("/daily-tea")
 async def daily_tea_report(
