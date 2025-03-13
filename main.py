@@ -536,6 +536,7 @@ async def dashboard(
 
     # Prepare work cost data for the chart
     work_cost_data = [float(loc.total_cost) for loc in work_cost_totals]
+    location_labels_work = [loc.other_location or 'Unknown' for loc in work_cost_totals]
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -551,6 +552,7 @@ async def dashboard(
         "daily_labels": daily_labels,
         "location_datasets": location_datasets,
         "location_labels": location_labels,
+        "location_labels_work": location_labels_work,
         "location_data": location_data,
         "work_cost_data": work_cost_data,
         "current_user": current_user

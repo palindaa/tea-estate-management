@@ -338,7 +338,7 @@
         new Chart(workCostCtx, {
             type: 'bar',
             data: {
-                labels: {{ location_labels|safe }},
+                labels: {{ location_labels_work|safe }},
                 datasets: [{
                     label: 'Total Work Cost',
                     data: {{ work_cost_data|safe }},

@@ -58,7 +58,7 @@
         <p>ජනනය කළ දිනය: {{ now.strftime('%Y-%m-%d %H:%M') }}</p>
     </div>
 
-    {% for data in salary_data if 'Monthly' in data.user.paytype and data.adjusted_basic == 0 %}
+    {% for data in salary_data if 'Monthly' in data.user.paytype and data.adjusted_basic == 0 and data.balance != 0 %}
     <div class="user-section">
         <h2>{{ data.user.username }}</h2>
         <table>
