@@ -13,7 +13,7 @@
 
     <!-- Date Selection -->
     <div class="mb-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <form method="GET" class="flex gap-4 items-end">
+        <form method="GET" class="flex gap-4 items-end" action="/revenue?year={{ selected_year }}&month={{ selected_month }}">
             <div>
                 <label class="block text-gray-700 dark:text-gray-300 mb-2">Year</label>
                 <select name="year" class="form-select dark:bg-gray-700">
@@ -29,6 +29,11 @@
                     <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            <div class="flex gap-2 items-center">
+                <button type="submit" class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                    Calculate
+                </button>
             </div>
         </form>
     </div>
