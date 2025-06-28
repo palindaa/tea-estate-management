@@ -491,13 +491,16 @@ async def dashboard(
     daily_labels = [d.strftime('%Y-%m-%d') for d in date_range]
 
     locations = list({result.tea_location for result in daily_tea_totals if result.tea_location})
-    location_data = {loc: [0]*30 for loc in locations}
+    location_data = {loc: [0]*31 for loc in locations}
+    location_data['Unknown'] = [0]*31
 
     # Fill the location data
     for result in daily_tea_totals:
         idx = (datetime.strptime(result.date, '%Y-%m-%d').date() - start_date).days
-        if 0 <= idx < 30:
-            location_data[result.tea_location][idx] += float(result.total)
+        if 0 <= idx < 31:
+            # Use 'Unknown Location' as default if tea_location is missing
+            location_key = result.tea_location or 'Unknown'
+            location_data[location_key][idx] += float(result.total)
 
     # Convert to chart.js format
     location_datasets = []
