@@ -227,66 +227,77 @@ async def add_work_page(
 @app.post("/add-work")
 async def create_work(
     request: Request,
-    user_id: int = Form(...),
-    tea_weight: Optional[str] = Form(None),
-    tea_location: Optional[str] = Form(None),
-    other_cost: Optional[str] = Form(None),
-    other_location: Optional[str] = Form(None),
-    advance_amount: Optional[str] = Form(None),
-    work_date: Optional[str] = Form(None),
-    work_description: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
-    def parse_float(value: Optional[str]) -> Optional[float]:
+    form_data = await request.form()
+    work_date_str = form_data.get("work_date")
+    
+    # Parse the work_date (same for all records)
+    if not work_date_str:
+        work_date_obj = date.today()
+    else:
+        try:
+            work_date_obj = date.fromisoformat(work_date_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+
+    # Get all records data
+    user_ids = form_data.getlist("user_id[]")
+    tea_weights = form_data.getlist("tea_weight[]")
+    tea_locations = form_data.getlist("tea_location[]")
+    other_costs = form_data.getlist("other_cost[]")
+    other_locations = form_data.getlist("other_location[]")
+    advance_amounts = form_data.getlist("advance_amount[]")
+    work_descriptions = form_data.getlist("work_description[]")
+
+    # Helper function to parse float
+    def parse_float(value: str) -> Optional[float]:
         if value and value.strip():
             try:
                 return float(value)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid number value: {value}")
+                return None
         return None
 
-    tea_weight_float = parse_float(tea_weight)
-    other_cost_float = parse_float(other_cost)
-    advance_amount_float = parse_float(advance_amount)
+    work_objects = []
+    for i in range(len(user_ids)):
+        # Skip if no user selected
+        if not user_ids[i]:
+            continue
+            
+        tea_weight_float = parse_float(tea_weights[i])
+        other_cost_float = parse_float(other_costs[i])
+        advance_amount_float = parse_float(advance_amounts[i])
 
-    # Handle missing work date
-    if not work_date:
-        work_date_obj = date.today()
-    else:
-        try:
-            work_date_obj = date.fromisoformat(work_date)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format")
+        # Calculate adjusted tea weight
+        adjusted_tea = None
+        if tea_weight_float is not None:
+            if tea_weight_float > 60:
+                adjusted_tea = tea_weight_float - 4
+            elif tea_weight_float > 25:
+                adjusted_tea = tea_weight_float - 3
+            elif tea_weight_float > 18:
+                adjusted_tea = tea_weight_float - 2
+            elif tea_weight_float > 10:
+                adjusted_tea = tea_weight_float - 1
+            else:
+                adjusted_tea = tea_weight_float
 
-    # Only calculate adjusted tea weight if tea weight is provided
-    adjusted_tea = None
-    if tea_weight_float is not None:
-        if tea_weight_float > 60:
-            adjusted_tea = tea_weight_float - 4
-        elif tea_weight_float > 25:
-            adjusted_tea = tea_weight_float - 3
-        elif tea_weight_float > 18:
-            adjusted_tea = tea_weight_float - 2
-        elif tea_weight_float > 10:
-            adjusted_tea = tea_weight_float - 1
-        else:
-            adjusted_tea = tea_weight_float
+        work = Work(
+            user_id=int(user_ids[i]),
+            tea_weight=tea_weight_float,
+            tea_location=tea_locations[i] or "",
+            other_cost=other_cost_float,
+            other_location=other_locations[i] or "",
+            advance_amount=advance_amount_float,
+            work_date=work_date_obj,
+            adjusted_tea_weight=adjusted_tea,
+            work_description=work_descriptions[i] or ""
+        )
+        work_objects.append(work)
 
-    # Create new work record
-    work = Work(
-        user_id=user_id,
-        tea_weight=tea_weight_float,
-        tea_location=tea_location,
-        other_cost=other_cost_float,
-        other_location=other_location,
-        advance_amount=advance_amount_float,
-        work_date=work_date_obj,
-        adjusted_tea_weight=adjusted_tea if tea_weight_float is not None else None,
-        work_description=work_description
-    )
-    
-    db.add(work)
+    db.add_all(work_objects)
     db.commit()
     
     return RedirectResponse(url="/add-work", status_code=303)
