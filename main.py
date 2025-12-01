@@ -661,7 +661,13 @@ async def salary_report(
 
         # Calculate values
         tea_income = tea_total * price_per_kg
-        total_salary = tea_income + other_total
+        
+        # Calculate bonus for tea weight exceeding 616 kg
+        bonus_amount = 0.0
+        if tea_total > 616 and price_per_kg < 50:
+            bonus_amount = (tea_total - 616) * (50 - price_per_kg)
+        
+        total_salary = tea_income + other_total + bonus_amount
 
         # Calculate number of Fridays in the selected month
         def count_fridays_in_month(year, month):
@@ -675,6 +681,7 @@ async def salary_report(
             "tea_weight": tea_total,
             "tea_income": tea_income,
             "other_income": other_total,
+            "bonus_amount": bonus_amount,
             "total_salary": total_salary,
             "advance": advance_total,
             "balance": balance,
