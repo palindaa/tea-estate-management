@@ -2,7 +2,7 @@ fastapi
 uvicorn
 jinja2
 sqlalchemy
-pyppeteer
+playwright
 python-jose==3.3.0
 bcrypt
 python-multipart

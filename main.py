@@ -19,7 +19,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import bcrypt
 from enum import Enum
-import pyppeteer
+from playwright.async_api import async_playwright
 import asyncio
 import os
 
@@ -863,9 +863,7 @@ async def generate_pdf(
     price_per_kg: float = 48.214, 
     current_user: AdminUser = Depends(get_current_user)
 ):
-    browser = None
     temp_html_path = None
-    temp_pdf_path = None
 
     try:
         # Get the same data as salary report
@@ -882,56 +880,25 @@ async def generate_pdf(
         temp_dir = "temp"
         os.makedirs(temp_dir, exist_ok=True)
         temp_html_path = os.path.join(temp_dir, "temp_salary.html")
-        temp_pdf_path = os.path.join(temp_dir, "temp_salary.pdf")
         
         with open(temp_html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-        # Launch browser with more robust options
-        browser = await pyppeteer.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu',
-                '--font-render-hinting=none'
-            ],
-            handleSIGINT=False,
-            handleSIGTERM=False,
-            handleSIGHUP=False,
-            ignoreHTTPSErrors=True
-        )
-
-        # Create a new page with a longer timeout
-        page = await browser.newPage()
-        
-        # Set viewport and load HTML file
-        await page.setViewport({'width': 1024, 'height': 768})
-        
-        # Load the HTML file with a longer timeout
-        await page.goto(
-            f'file://{os.path.abspath(temp_html_path)}',
-            waitUntil=['networkidle0', 'load'],
-            timeout=300000
-        )
-
-        # Wait for fonts to load and content to render
-        await page.evaluate('() => new Promise(resolve => setTimeout(resolve, 20000))')
-
-        # Generate PDF with more specific options
-        await page.pdf({
-            'path': temp_pdf_path,
-            'format': 'A4',
-            'printBackground': True,
-            'margin': {'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'},
-            'preferCSSPageSize': True
-        })
-
-        # Read the generated PDF
-        with open(temp_pdf_path, "rb") as f:
-            pdf_content = f.read()
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            
+            # Load the HTML file
+            await page.goto(f'file://{os.path.abspath(temp_html_path)}', wait_until='networkidle')
+            
+            # Generate PDF directly to bytes
+            pdf_content = await page.pdf(
+                format='A4',
+                print_background=True,
+                margin={'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'}
+            )
+            
+            await browser.close()
 
         # Return the PDF as a streaming response
         return StreamingResponse(
@@ -946,19 +913,10 @@ async def generate_pdf(
         raise HTTPException(status_code=500, detail=error_message)
 
     finally:
-        # Clean up resources in finally block
-        if browser:
-            try:
-                await browser.close()
-            except Exception as e:
-                print(f"Browser cleanup error: {str(e)}")
-
         # Clean up temporary files
         try:
             if temp_html_path and os.path.exists(temp_html_path):
                 os.remove(temp_html_path)
-            if temp_pdf_path and os.path.exists(temp_pdf_path):
-                os.remove(temp_pdf_path)
         except Exception as e:
             print(f"File cleanup error: {str(e)}")
 
