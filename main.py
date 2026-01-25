@@ -49,6 +49,10 @@ class User(Base):
     paytype = Column(String)
     basic_salary = Column(Float, nullable=True, default=0.0)
     weekly_salary = Column(Float, nullable=True, default=0.0)
+    epf_etf_percentage = Column(Float, nullable=True, default=50.0)  # Percentage of salary for EPF/ETF calculation
+    epf_employee_percentage = Column(Float, nullable=True, default=8.0)  # EPF deduction from employee
+    epf_employer_percentage = Column(Float, nullable=True, default=12.0)  # EPF contribution from employer
+    etf_employer_percentage = Column(Float, nullable=True, default=3.0)  # ETF contribution from employer
 
 class Work(Base):
     __tablename__ = "works"
@@ -95,6 +99,56 @@ def get_db():
         db.close()
 
 app = FastAPI()
+
+# Migration function to update existing users with default EPF/ETF values
+@app.on_event("startup")
+async def migrate_epf_etf_data():
+    from sqlalchemy import inspect, text
+    
+    db = SessionLocal()
+    try:
+        # Check if columns exist in the users table
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('users')]
+        
+        # Add columns if they don't exist (SQLite ALTER TABLE)
+        if 'epf_etf_percentage' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN epf_etf_percentage REAL DEFAULT 50.0"))
+        if 'epf_employee_percentage' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN epf_employee_percentage REAL DEFAULT 8.0"))
+        if 'epf_employer_percentage' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN epf_employer_percentage REAL DEFAULT 12.0"))
+        if 'etf_employer_percentage' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN etf_employer_percentage REAL DEFAULT 3.0"))
+        
+        db.commit()
+        
+        # Update existing users that have NULL values for EPF/ETF fields
+        users_to_update = db.query(User).filter(
+            (User.epf_etf_percentage == None) | 
+            (User.epf_employee_percentage == None) |
+            (User.epf_employer_percentage == None) |
+            (User.etf_employer_percentage == None)
+        ).all()
+        
+        for user in users_to_update:
+            if user.epf_etf_percentage is None:
+                user.epf_etf_percentage = 50.0
+            if user.epf_employee_percentage is None:
+                user.epf_employee_percentage = 8.0
+            if user.epf_employer_percentage is None:
+                user.epf_employer_percentage = 12.0
+            if user.etf_employer_percentage is None:
+                user.etf_employer_percentage = 3.0
+        
+        if users_to_update:
+            db.commit()
+            print(f"Migrated {len(users_to_update)} users with default EPF/ETF values")
+    except Exception as e:
+        db.rollback()
+        print(f"Migration error: {str(e)}")
+    finally:
+        db.close()
 
 # Add this line to mount static files (should be after app creation and before routes)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -176,6 +230,10 @@ async def create_user(
     paytype: list[str] = Form(...),
     basic_salary: str = Form(""),
     weekly_salary: str = Form(""),
+    epf_etf_percentage: str = Form("50"),
+    epf_employee_percentage: str = Form("8"),
+    epf_employer_percentage: str = Form("12"),
+    etf_employer_percentage: str = Form("3"),
     db: Session = Depends(get_db), 
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -185,13 +243,23 @@ async def create_user(
             return float(value) if value.strip() else 0.0
         except ValueError:
             return 0.0
+    
+    def parse_percentage(value: str, default: float) -> float:
+        try:
+            return float(value) if value.strip() else default
+        except ValueError:
+            return default
 
     paytype_str = ",".join(paytype)
     user = User(
         username=username,
         paytype=paytype_str,
         basic_salary=parse_salary(basic_salary),
-        weekly_salary=parse_salary(weekly_salary)
+        weekly_salary=parse_salary(weekly_salary),
+        epf_etf_percentage=parse_percentage(epf_etf_percentage, 50.0),
+        epf_employee_percentage=parse_percentage(epf_employee_percentage, 8.0),
+        epf_employer_percentage=parse_percentage(epf_employer_percentage, 12.0),
+        etf_employer_percentage=parse_percentage(etf_employer_percentage, 3.0)
     )
     db.add(user)
     db.commit()
@@ -674,7 +742,25 @@ async def salary_report(
 
         fridays_count = count_fridays_in_month(selected_year, selected_month)
         adjusted_basic = (user.basic_salary or 0) + (fridays_count * (user.weekly_salary or 0))
-        balance = adjusted_basic + total_salary - advance_total
+        
+        # Calculate total monthly salary for EPF/ETF
+        total_monthly_salary = adjusted_basic + total_salary
+        
+        # Get EPF/ETF percentages (with defaults)
+        epf_etf_percentage = user.epf_etf_percentage if user.epf_etf_percentage is not None else 60.0
+        epf_employee_pct = user.epf_employee_percentage if user.epf_employee_percentage is not None else 8.0
+        epf_employer_pct = user.epf_employer_percentage if user.epf_employer_percentage is not None else 12.0
+        etf_employer_pct = user.etf_employer_percentage if user.etf_employer_percentage is not None else 3.0
+        
+        # Calculate EPF/ETF base (percentage of total monthly salary)
+        epf_etf_base = total_monthly_salary * (epf_etf_percentage / 100.0)
+        
+        # Calculate EPF/ETF amounts
+        epf_from_employee = epf_etf_base * (epf_employee_pct / 100.0)
+        epf_from_employer = epf_etf_base * (epf_employer_pct / 100.0)
+        etf_from_employer = epf_etf_base * (etf_employer_pct / 100.0)
+        
+        balance = adjusted_basic + total_salary - advance_total - epf_from_employee
         salary_data.append({
             "user": user,
             "tea_weight": tea_total,
@@ -687,7 +773,11 @@ async def salary_report(
             "adjusted_basic": adjusted_basic,
             "tea_days": tea_days,
             "extra_days": extra_days,
-            "aththam_days": aththam_days
+            "aththam_days": aththam_days,
+            "epf_etf_percentage": epf_etf_percentage,
+            "epf_from_employee": epf_from_employee,
+            "epf_from_employer": epf_from_employer,
+            "etf_from_employer": etf_from_employer
         })
 
     # Process weekly employees with week filter

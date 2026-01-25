@@ -88,6 +88,18 @@
                     <td>{{ "%.2f"|format(data.advance) }}</td>
                 </tr>
                 <tr>
+                    <th>EPF (කම්කරුවාගෙන්)</th>
+                    <td>{{ data.epf_from_employee | round(2) | thousands_commas }}</td>
+                </tr>
+                <tr>
+                    <th>EPF (රැකියා යෝජකයාගෙන්)</th>
+                    <td>{{ data.epf_from_employer | round(2) | thousands_commas }}</td>
+                </tr>
+                <tr>
+                    <th>ETF (රැකියා යෝජකයාගෙන්)</th>
+                    <td>{{ data.etf_from_employer | round(2) | thousands_commas }}</td>
+                </tr>
+                <tr>
                     <th style="font-size: 20px;"><b>ශේෂය</b></th>
                     <td style="font-size: 20px;"><b>{{ data.balance | thousands_commas }}</b></td>
                 </tr>

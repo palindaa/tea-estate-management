@@ -54,6 +54,48 @@
                         <input type="number" step="0.01" id="weekly_salary" name="weekly_salary" 
                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
                     </div>
+                    
+                    <!-- EPF/ETF Settings -->
+                    <div class="mb-4 border-t pt-4 mt-4">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">EPF/ETF Settings</h3>
+                        
+                        <div class="mb-4">
+                            <label for="epf_etf_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                EPF/ETF Base Percentage (% of salary):
+                            </label>
+                            <input type="number" step="0.01" id="epf_etf_percentage" name="epf_etf_percentage" 
+                                   value="50" placeholder="50"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Percentage of total monthly salary used for EPF/ETF calculation (default: 50%)</p>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="epf_employee_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                EPF Employee Deduction (%):
+                            </label>
+                            <input type="number" step="0.01" id="epf_employee_percentage" name="epf_employee_percentage" 
+                                   value="8" placeholder="8"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="epf_employer_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                EPF Employer Contribution (%):
+                            </label>
+                            <input type="number" step="0.01" id="epf_employer_percentage" name="epf_employer_percentage" 
+                                   value="12" placeholder="12"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="etf_employer_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                ETF Employer Contribution (%):
+                            </label>
+                            <input type="number" step="0.01" id="etf_employer_percentage" name="etf_employer_percentage" 
+                                   value="3" placeholder="3"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                        </div>
+                    </div>
                 </div>
                 <button type="submit" 
                         class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
