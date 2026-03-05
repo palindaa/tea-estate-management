@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import HTTPException
 from datetime import datetime, date, timedelta
 from sqlalchemy.exc import IntegrityError
-from calendar import monthcalendar
+from calendar import monthcalendar, monthrange
 from fastapi.responses import StreamingResponse
 import io
 from collections import defaultdict
@@ -22,6 +22,8 @@ from enum import Enum
 from playwright.async_api import async_playwright
 import asyncio
 import os
+import math
+import random
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
@@ -658,6 +660,8 @@ async def salary_report(
     selected_year = year or now.year
     selected_month = month or now.month
     selected_week = (int(week) if week is not None else week_of_month(now))
+    days_in_month = monthrange(selected_year, selected_month)[1]
+    day_numbers = list(range(1, days_in_month + 1))
     
     # Get all users
     users = db.query(User).all()
@@ -728,6 +732,45 @@ async def salary_report(
 
         # Calculate values
         tea_income = tea_total * price_per_kg
+        labour_rate = 1350.0
+
+        # Get EPF/ETF percentages (with defaults)
+        epf_etf_percentage = user.epf_etf_percentage if user.epf_etf_percentage is not None else 60.0
+        epf_employee_pct = user.epf_employee_percentage if user.epf_employee_percentage is not None else 8.0
+        epf_employer_pct = user.epf_employer_percentage if user.epf_employer_percentage is not None else 12.0
+        etf_employer_pct = user.etf_employer_percentage if user.etf_employer_percentage is not None else 3.0
+
+        # If EPF/ETF percentage is zero, keep salary/days as zero and move all
+        # tea income to contract plucking.
+        if epf_etf_percentage <= 0:
+            salary_base_amount = 0.0
+            working_days_from_salary = 0
+            contract_plucking_income = tea_income
+        else:
+            salary_ratio = min(epf_etf_percentage, 100.0) / 100.0
+            salary_base_amount = math.floor((tea_income * salary_ratio) / labour_rate) * labour_rate
+            working_days_from_salary = int(salary_base_amount / labour_rate) if labour_rate > 0 else 0
+            contract_plucking_income = tea_income - salary_base_amount
+
+        # Build attendance marks where total marked days equals working days.
+        # Sundays are dropped first, and any remaining drops are randomized.
+        sheet_working_days = max(0, min(working_days_from_salary, days_in_month))
+        drop_count = days_in_month - sheet_working_days
+        all_days = list(range(1, days_in_month + 1))
+        sunday_days = [
+            day for day in all_days
+            if date(selected_year, selected_month, day).weekday() == 6
+        ]
+        dropped_days = set(sunday_days[:drop_count])
+
+        remaining_drop_count = drop_count - len(dropped_days)
+        if remaining_drop_count > 0:
+            remaining_days = [day for day in all_days if day not in dropped_days]
+            rng = random.Random(f"{selected_year}-{selected_month}-{user.id}-{sheet_working_days}")
+            rng.shuffle(remaining_days)
+            dropped_days.update(remaining_days[:remaining_drop_count])
+
+        attendance_marks = [0 if day in dropped_days else 1 for day in all_days]
         
         # Calculate bonus for tea weight exceeding 616 kg
         bonus_amount = 0.0
@@ -743,17 +786,13 @@ async def salary_report(
         fridays_count = count_fridays_in_month(selected_year, selected_month)
         adjusted_basic = (user.basic_salary or 0) + (fridays_count * (user.weekly_salary or 0))
         
-        # Calculate total monthly salary for EPF/ETF
-        total_monthly_salary = adjusted_basic + total_salary
-        
-        # Get EPF/ETF percentages (with defaults)
-        epf_etf_percentage = user.epf_etf_percentage if user.epf_etf_percentage is not None else 60.0
-        epf_employee_pct = user.epf_employee_percentage if user.epf_employee_percentage is not None else 8.0
-        epf_employer_pct = user.epf_employer_percentage if user.epf_employer_percentage is not None else 12.0
-        etf_employer_pct = user.etf_employer_percentage if user.etf_employer_percentage is not None else 3.0
-        
-        # Calculate EPF/ETF base (percentage of total monthly salary)
-        epf_etf_base = total_monthly_salary * (epf_etf_percentage / 100.0)
+        # For contract-only salary vouchers, EPF/ETF is calculated from the
+        # salary base amount (70% of tea income rounded down to 1350 multiples).
+        if adjusted_basic == 0:
+            epf_etf_base = salary_base_amount
+        else:
+            total_monthly_salary = adjusted_basic + total_salary
+            epf_etf_base = total_monthly_salary * (epf_etf_percentage / 100.0)
         
         # Calculate EPF/ETF amounts
         epf_from_employee = epf_etf_base * (epf_employee_pct / 100.0)
@@ -771,13 +810,20 @@ async def salary_report(
             "advance": advance_total,
             "balance": balance,
             "adjusted_basic": adjusted_basic,
+            "salary_base_amount": salary_base_amount,
+            "working_days_from_salary": working_days_from_salary,
+            "sheet_working_days": sheet_working_days,
+            "contract_plucking_income": contract_plucking_income,
+            "labour_rate": labour_rate,
+            "attendance_marks": attendance_marks,
             "tea_days": tea_days,
             "extra_days": extra_days,
             "aththam_days": aththam_days,
             "epf_etf_percentage": epf_etf_percentage,
             "epf_from_employee": epf_from_employee,
             "epf_from_employer": epf_from_employer,
-            "etf_from_employer": etf_from_employer
+            "etf_from_employer": etf_from_employer,
+            "deduction_total": advance_total + epf_from_employee
         })
 
     # Process weekly employees with week filter
@@ -824,6 +870,8 @@ async def salary_report(
         "fridays_count": fridays_count,
         "now": now,
         "selected_week": selected_week,
+        "days_in_month": days_in_month,
+        "day_numbers": day_numbers,
         "weekly_salary_data": weekly_salary_data,
         "current_user": current_user
     }
@@ -957,11 +1005,23 @@ async def generate_pdf(
 
     try:
         # Get the same data as salary report
-        salary_report_data = await salary_report(request, db, year, month, price_per_kg)
+        salary_report_data = await salary_report(
+            request=request,
+            db=db,
+            year=year,
+            month=month,
+            price_per_kg=price_per_kg,
+            current_user=current_user
+        )
         context = salary_report_data.context
         
         # Add current datetime to context
         context["now"] = datetime.now()
+        context["month_label"] = date(
+            context["selected_year"],
+            context["selected_month"],
+            1
+        ).strftime("%B %Y")
         
         # Render HTML template
         html_content = templates.get_template("salary_pdf_sinhala.html").render(context)
@@ -985,7 +1045,7 @@ async def generate_pdf(
             pdf_content = await page.pdf(
                 format='A4',
                 print_background=True,
-                margin={'top': '20mm', 'right': '20mm', 'bottom': '20mm', 'left': '20mm'}
+                margin={'top': '8mm', 'right': '8mm', 'bottom': '8mm', 'left': '8mm'}
             )
             
             await browser.close()
@@ -1004,6 +1064,88 @@ async def generate_pdf(
 
     finally:
         # Clean up temporary files
+        try:
+            if temp_html_path and os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+        except Exception as e:
+            print(f"File cleanup error: {str(e)}")
+
+@app.get("/generate-epf-pdf")
+async def generate_epf_pdf(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    price_per_kg: float = 48.214,
+    current_user: AdminUser = Depends(get_current_user)
+):
+    temp_html_path = None
+
+    try:
+        salary_report_data = await salary_report(
+            request=request,
+            db=db,
+            year=year,
+            month=month,
+            price_per_kg=price_per_kg,
+            current_user=current_user
+        )
+        context = salary_report_data.context
+        context["now"] = datetime.now()
+        context["month_label"] = date(
+            context["selected_year"],
+            context["selected_month"],
+            1
+        ).strftime("%B %Y")
+
+        context["epf_salary_data"] = [
+            data for data in context["salary_data"]
+            if (
+                'Monthly' in data["user"].paytype
+                and data["adjusted_basic"] == 0
+                and data["epf_etf_percentage"] > 0
+                and data["balance"] != 0
+            )
+        ]
+
+        html_content = templates.get_template("salary_pdf_epf.html").render(context)
+
+        temp_dir = "temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_html_path = os.path.join(temp_dir, "temp_salary_epf.html")
+
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(f'file://{os.path.abspath(temp_html_path)}', wait_until='networkidle')
+            pdf_content = await page.pdf(
+                format='A4',
+                landscape=True,
+                print_background=True,
+                margin={'top': '8mm', 'right': '8mm', 'bottom': '8mm', 'left': '8mm'}
+            )
+            await browser.close()
+
+        return StreamingResponse(
+            io.BytesIO(pdf_content),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=epf_labour_report_"
+                    f"{context['selected_year']}_{context['selected_month']}.pdf"
+                )
+            }
+        )
+
+    except Exception as e:
+        error_message = f"EPF PDF generation failed: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+    finally:
         try:
             if temp_html_path and os.path.exists(temp_html_path):
                 os.remove(temp_html_path)
