@@ -57,6 +57,8 @@ class User(Base):
     etf_employer_percentage = Column(Float, nullable=True, default=3.0)  # ETF contribution from employer
     nic = Column(String, nullable=True)  # National Identity Card number for EPF Form C
     epf_member_no = Column(String, nullable=True)  # EPF member number for Form C
+    disabled = Column(Integer, nullable=False, default=0)  # 1 = hidden from add-work + reports
+    is_manager = Column(Integer, nullable=False, default=0)  # 1 = user is a manager
 
 class Work(Base):
     __tablename__ = "works"
@@ -128,6 +130,10 @@ async def migrate_epf_etf_data():
             db.execute(text("ALTER TABLE users ADD COLUMN nic TEXT"))
         if 'epf_member_no' not in columns:
             db.execute(text("ALTER TABLE users ADD COLUMN epf_member_no TEXT"))
+        if 'disabled' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0"))
+        if 'is_manager' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN is_manager INTEGER NOT NULL DEFAULT 0"))
 
         db.commit()
         
@@ -259,6 +265,7 @@ async def create_user(
     etf_employer_percentage: str = Form("3"),
     nic: str = Form(""),
     epf_member_no: str = Form(""),
+    is_manager: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -273,7 +280,8 @@ async def create_user(
         epf_employer_percentage=parse_percentage_input(epf_employer_percentage, 12.0),
         etf_employer_percentage=parse_percentage_input(etf_employer_percentage, 3.0),
         nic=(nic or "").strip() or None,
-        epf_member_no=(epf_member_no or "").strip() or None
+        epf_member_no=(epf_member_no or "").strip() or None,
+        is_manager=1 if is_manager else 0
     )
     db.add(user)
     db.commit()
@@ -314,6 +322,7 @@ async def update_user(
     etf_employer_percentage: str = Form("3"),
     nic: str = Form(""),
     epf_member_no: str = Form(""),
+    is_manager: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -331,6 +340,7 @@ async def update_user(
     user.etf_employer_percentage = parse_percentage_input(etf_employer_percentage, 3.0)
     user.nic = (nic or "").strip() or None
     user.epf_member_no = (epf_member_no or "").strip() or None
+    user.is_manager = 1 if is_manager else 0
 
     try:
         db.commit()
@@ -339,6 +349,21 @@ async def update_user(
         raise HTTPException(status_code=400, detail="Username already exists")
 
     return RedirectResponse(url="/users", status_code=303)
+
+
+@app.post("/users/{user_id}/toggle-disabled")
+async def toggle_user_disabled(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.disabled = 0 if user.disabled else 1
+    db.commit()
+    return RedirectResponse(url="/users", status_code=303)
+
 
 @app.get("/add-work")
 async def add_work_page(
@@ -357,7 +382,7 @@ async def add_work_page(
     
     return templates.TemplateResponse("add_work.html", {
         "request": request,
-        "users": db.query(User).all(),
+        "users": db.query(User).filter(User.disabled == 0).order_by(User.username).all(),
         "works": works,
         "current_page": page,
         "total_pages": (total + limit - 1) // limit,
@@ -735,9 +760,9 @@ async def salary_report(
     selected_week = (int(week) if week is not None else week_of_month(now))
     days_in_month = monthrange(selected_year, selected_month)[1]
     day_numbers = list(range(1, days_in_month + 1))
-    
-    # Get all users
-    users = db.query(User).all()
+
+    # Get active users only (disabled users are hidden from salary + exports)
+    users = db.query(User).filter(User.disabled == 0).all()
     
     # Get salary data for each user
     salary_data = []
