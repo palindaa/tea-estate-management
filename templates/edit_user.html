@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    {% include "components/head.html" %}
+</head>
+<body class="min-h-full bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto">
+        {% include "header.html" %}
+
+        <div class="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <h2 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Edit User</h2>
+
+            <form class="space-y-4" method="POST" action="/users/{{ user.id }}/edit">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        User Name
+                    </label>
+                    <input type="text"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2"
+                           name="username"
+                           value="{{ user.username }}"
+                           required>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Pay Type
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <label class="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                            <input type="checkbox" name="paytype" value="Daily"
+                                   {% if 'Daily' in selected_paytypes %}checked{% endif %}>
+                            Daily
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                            <input type="checkbox" name="paytype" value="Weekly"
+                                   {% if 'Weekly' in selected_paytypes %}checked{% endif %}>
+                            Weekly
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                            <input type="checkbox" name="paytype" value="Monthly"
+                                   {% if 'Monthly' in selected_paytypes %}checked{% endif %}>
+                            Monthly
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="basic_salary" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Basic Salary (Monthly):
+                    </label>
+                    <input type="number" step="0.01" id="basic_salary" name="basic_salary"
+                           value="{{ user.basic_salary if user.basic_salary is not none else '' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                </div>
+
+                <div>
+                    <label for="weekly_salary" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Weekly Salary:
+                    </label>
+                    <input type="number" step="0.01" id="weekly_salary" name="weekly_salary"
+                           value="{{ user.weekly_salary if user.weekly_salary is not none else '' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                </div>
+
+                <div class="mb-4 border-t pt-4 mt-4">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">EPF/ETF Settings</h3>
+
+                    <div class="mb-4">
+                        <label for="epf_etf_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            EPF/ETF Base Percentage (% of salary):
+                        </label>
+                        <input type="number" step="0.01" id="epf_etf_percentage" name="epf_etf_percentage"
+                               value="{{ user.epf_etf_percentage if user.epf_etf_percentage is not none else 50 }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="epf_employee_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            EPF Employee Deduction (%):
+                        </label>
+                        <input type="number" step="0.01" id="epf_employee_percentage" name="epf_employee_percentage"
+                               value="{{ user.epf_employee_percentage if user.epf_employee_percentage is not none else 8 }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="epf_employer_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            EPF Employer Contribution (%):
+                        </label>
+                        <input type="number" step="0.01" id="epf_employer_percentage" name="epf_employer_percentage"
+                               value="{{ user.epf_employer_percentage if user.epf_employer_percentage is not none else 12 }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="etf_employer_percentage" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            ETF Employer Contribution (%):
+                        </label>
+                        <input type="number" step="0.01" id="etf_employer_percentage" name="etf_employer_percentage"
+                               value="{{ user.etf_employer_percentage if user.etf_employer_percentage is not none else 3 }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit"
+                            class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                        Update User
+                    </button>
+                    <a href="/users"
+                       class="bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors dark:bg-gray-600 dark:text-white dark:hover:bg-gray-500">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

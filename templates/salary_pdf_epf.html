@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Monthly Labour Payment Details</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 8mm;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Times New Roman", serif;
+            color: #1e1e1e;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4mm;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .header .center {
+            font-size: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 7.5px;
+        }
+
+        th, td {
+            border: 1px solid #2a2a2a;
+            padding: 2px;
+            text-align: center;
+            line-height: 3.5;
+            vertical-align: middle;
+        }
+
+        tbody td {
+            padding-top: 3px;
+            padding-bottom: 3px;
+        }
+
+        .col-no {
+            width: 14px;
+        }
+
+        .col-name {
+            width: 88px;
+            text-align: left;
+            padding-left: 3px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .col-day {
+            width: 11px;
+        }
+
+        .col-compact {
+            width: 38px;
+        }
+
+        .col-balance {
+            width: 54px;
+        }
+
+        .col-deduction {
+            width: 66px;
+        }
+
+        .col-sign {
+            width: 54px;
+        }
+
+        .num {
+            text-align: right;
+            padding-right: 4px;
+            white-space: nowrap;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>MONTHLY LABOUR PAYMENT DETAILS.</div>
+        <div class="center">PANSALKANDA WATHTHA.</div>
+        <div>MONTH OF {{ month_label | upper }}.</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2" class="col-no">No</th>
+                <th rowspan="2" class="col-name">Name</th>
+                {% for day in day_numbers %}
+                <th rowspan="2" class="col-day">{{ day }}</th>
+                {% endfor %}
+                <th rowspan="2" class="col-compact">No of<br>Days</th>
+                <th rowspan="2" class="col-compact">Labour<br>Rate</th>
+                <th rowspan="2" class="col-compact">Salary</th>
+                <th colspan="3">Deductions</th>
+                <th rowspan="2" class="col-balance">Balance</th>
+                <th rowspan="2" class="col-sign">Signature</th>
+            </tr>
+            <tr>
+                <th class="col-deduction">Advance</th>
+                <th class="col-deduction">EPF 8%</th>
+                <th class="col-deduction">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for data in epf_salary_data %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td class="col-name">{{ data.user.username }}</td>
+                {% for mark in data.attendance_marks %}
+                <td>{{ mark }}</td>
+                {% endfor %}
+                <td>{{ data.sheet_working_days }}</td>
+                <td class="num">{{ data.labour_rate | round(0) | thousands_commas }}</td>
+                <td class="num">{{ data.salary_base_amount | round(2) | thousands_commas }}</td>
+                <td class="num">{{ data.advance | round(2) | thousands_commas }}</td>
+                <td class="num">{{ data.epf_from_employee | round(2) | thousands_commas }}</td>
+                <td class="num">{{ data.deduction_total | round(2) | thousands_commas }}</td>
+                <td class="num">{{ (data.salary_base_amount - data.deduction_total) | round(2) | thousands_commas }}</td>
+                <td></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="{{ day_numbers|length + 10 }}" class="empty">
+                    No EPF records available for {{ month_label }}.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Depends, Form, Cookie
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
-from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date, case, Enum as SQLAlchemyEnum
+from sqlalchemy import create_engine, Column, String, Integer, Float, DateTime, ForeignKey, Date, case, or_, Enum as SQLAlchemyEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import func
@@ -219,6 +219,21 @@ async def read_root():
 async def ping():
     return {"status": "ok"}
 
+
+def parse_salary_input(value: str) -> float:
+    try:
+        return float(value) if value.strip() else 0.0
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def parse_percentage_input(value: str, default: float) -> float:
+    try:
+        return float(value) if value.strip() else default
+    except (ValueError, AttributeError):
+        return default
+
+
 @app.get("/users")
 async def users_page(request: Request, db: Session = Depends(get_db), 
     current_user: AdminUser = Depends(get_current_user)):
@@ -239,32 +254,76 @@ async def create_user(
     db: Session = Depends(get_db), 
     current_user: AdminUser = Depends(get_current_user)
 ):
-    # Handle empty salary inputs
-    def parse_salary(value: str) -> float:
-        try:
-            return float(value) if value.strip() else 0.0
-        except ValueError:
-            return 0.0
-    
-    def parse_percentage(value: str, default: float) -> float:
-        try:
-            return float(value) if value.strip() else default
-        except ValueError:
-            return default
-
     paytype_str = ",".join(paytype)
     user = User(
         username=username,
         paytype=paytype_str,
-        basic_salary=parse_salary(basic_salary),
-        weekly_salary=parse_salary(weekly_salary),
-        epf_etf_percentage=parse_percentage(epf_etf_percentage, 50.0),
-        epf_employee_percentage=parse_percentage(epf_employee_percentage, 8.0),
-        epf_employer_percentage=parse_percentage(epf_employer_percentage, 12.0),
-        etf_employer_percentage=parse_percentage(etf_employer_percentage, 3.0)
+        basic_salary=parse_salary_input(basic_salary),
+        weekly_salary=parse_salary_input(weekly_salary),
+        epf_etf_percentage=parse_percentage_input(epf_etf_percentage, 50.0),
+        epf_employee_percentage=parse_percentage_input(epf_employee_percentage, 8.0),
+        epf_employer_percentage=parse_percentage_input(epf_employer_percentage, 12.0),
+        etf_employer_percentage=parse_percentage_input(etf_employer_percentage, 3.0)
     )
     db.add(user)
     db.commit()
+    return RedirectResponse(url="/users", status_code=303)
+
+
+@app.get("/users/{user_id}/edit")
+async def edit_user_page(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    selected_paytypes = [pt.strip() for pt in (user.paytype or "").split(",") if pt.strip()]
+    return templates.TemplateResponse("edit_user.html", {
+        "request": request,
+        "user": user,
+        "selected_paytypes": selected_paytypes,
+        "current_user": current_user
+    })
+
+
+@app.post("/users/{user_id}/edit")
+async def update_user(
+    request: Request,
+    user_id: int,
+    username: str = Form(...),
+    paytype: list[str] = Form(...),
+    basic_salary: str = Form(""),
+    weekly_salary: str = Form(""),
+    epf_etf_percentage: str = Form("50"),
+    epf_employee_percentage: str = Form("8"),
+    epf_employer_percentage: str = Form("12"),
+    etf_employer_percentage: str = Form("3"),
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.username = username
+    user.paytype = ",".join(paytype)
+    user.basic_salary = parse_salary_input(basic_salary)
+    user.weekly_salary = parse_salary_input(weekly_salary)
+    user.epf_etf_percentage = parse_percentage_input(epf_etf_percentage, 50.0)
+    user.epf_employee_percentage = parse_percentage_input(epf_employee_percentage, 8.0)
+    user.epf_employer_percentage = parse_percentage_input(epf_employer_percentage, 12.0)
+    user.etf_employer_percentage = parse_percentage_input(etf_employer_percentage, 3.0)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Username already exists")
+
     return RedirectResponse(url="/users", status_code=303)
 
 @app.get("/add-work")
@@ -753,7 +812,9 @@ async def salary_report(
             contract_plucking_income = tea_income - salary_base_amount
 
         # Build attendance marks where total marked days equals working days.
-        # Sundays are dropped first, and any remaining drops are randomized.
+        # Days the user had no work record on are always marked absent. Any
+        # remaining drops needed to match the salary-derived working day count
+        # are taken from Sundays first, then deterministic random.
         sheet_working_days = max(0, min(working_days_from_salary, days_in_month))
         drop_count = days_in_month - sheet_working_days
         all_days = list(range(1, days_in_month + 1))
@@ -761,14 +822,42 @@ async def salary_report(
             day for day in all_days
             if date(selected_year, selected_month, day).weekday() == 6
         ]
-        dropped_days = set(sunday_days[:drop_count])
+
+        attended_rows = db.query(func.distinct(Work.work_date)).filter(
+            Work.user_id == user.id,
+            func.strftime('%Y', Work.work_date) == f"{selected_year:04d}",
+            func.strftime('%m', Work.work_date) == f"{selected_month:02d}",
+            or_(Work.tea_weight > 0, Work.other_cost > 0)
+        ).all()
+        attended_days = set()
+        for row in attended_rows:
+            work_date_value = row[0]
+            if not work_date_value:
+                continue
+            if isinstance(work_date_value, str):
+                work_date_value = datetime.strptime(work_date_value, '%Y-%m-%d').date()
+            attended_days.add(work_date_value.day)
+
+        dropped_days = {day for day in all_days if day not in attended_days}
 
         remaining_drop_count = drop_count - len(dropped_days)
         if remaining_drop_count > 0:
-            remaining_days = [day for day in all_days if day not in dropped_days]
-            rng = random.Random(f"{selected_year}-{selected_month}-{user.id}-{sheet_working_days}")
-            rng.shuffle(remaining_days)
-            dropped_days.update(remaining_days[:remaining_drop_count])
+            attended_sundays = [day for day in sunday_days if day not in dropped_days]
+            extra_sunday_drops = attended_sundays[:remaining_drop_count]
+            dropped_days.update(extra_sunday_drops)
+            remaining_drop_count -= len(extra_sunday_drops)
+            if remaining_drop_count > 0:
+                remaining_days = [day for day in all_days if day not in dropped_days]
+                rng = random.Random(f"{selected_year}-{selected_month}-{user.id}-{sheet_working_days}")
+                rng.shuffle(remaining_days)
+                dropped_days.update(remaining_days[:remaining_drop_count])
+
+        # If actual non-attendance exceeds the salary-derived drop count, the
+        # sheet's day total has to come down with it so the printed salary
+        # (sheet_working_days * labour_rate) stays consistent with the marks.
+        sheet_working_days = days_in_month - len(dropped_days)
+        salary_base_amount = sheet_working_days * labour_rate
+        contract_plucking_income = tea_income - salary_base_amount
 
         attendance_marks = [0 if day in dropped_days else 1 for day in all_days]
         
