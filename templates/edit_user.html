@@ -22,6 +22,21 @@
                            required>
                 </div>
 
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">NIC No.</label>
+                        <input type="text" name="nic" placeholder="Optional"
+                               value="{{ user.nic or '' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">EPF Member No.</label>
+                        <input type="text" name="epf_member_no" placeholder="Optional"
+                               value="{{ user.epf_member_no or '' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2 border-2">
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Pay Type

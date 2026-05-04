@@ -55,6 +55,8 @@ class User(Base):
     epf_employee_percentage = Column(Float, nullable=True, default=8.0)  # EPF deduction from employee
     epf_employer_percentage = Column(Float, nullable=True, default=12.0)  # EPF contribution from employer
     etf_employer_percentage = Column(Float, nullable=True, default=3.0)  # ETF contribution from employer
+    nic = Column(String, nullable=True)  # National Identity Card number for EPF Form C
+    epf_member_no = Column(String, nullable=True)  # EPF member number for Form C
 
 class Work(Base):
     __tablename__ = "works"
@@ -122,7 +124,11 @@ async def migrate_epf_etf_data():
             db.execute(text("ALTER TABLE users ADD COLUMN epf_employer_percentage REAL DEFAULT 12.0"))
         if 'etf_employer_percentage' not in columns:
             db.execute(text("ALTER TABLE users ADD COLUMN etf_employer_percentage REAL DEFAULT 3.0"))
-        
+        if 'nic' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN nic TEXT"))
+        if 'epf_member_no' not in columns:
+            db.execute(text("ALTER TABLE users ADD COLUMN epf_member_no TEXT"))
+
         db.commit()
         
         # Update existing users that have NULL values for EPF/ETF fields
@@ -251,7 +257,9 @@ async def create_user(
     epf_employee_percentage: str = Form("8"),
     epf_employer_percentage: str = Form("12"),
     etf_employer_percentage: str = Form("3"),
-    db: Session = Depends(get_db), 
+    nic: str = Form(""),
+    epf_member_no: str = Form(""),
+    db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
     paytype_str = ",".join(paytype)
@@ -263,7 +271,9 @@ async def create_user(
         epf_etf_percentage=parse_percentage_input(epf_etf_percentage, 50.0),
         epf_employee_percentage=parse_percentage_input(epf_employee_percentage, 8.0),
         epf_employer_percentage=parse_percentage_input(epf_employer_percentage, 12.0),
-        etf_employer_percentage=parse_percentage_input(etf_employer_percentage, 3.0)
+        etf_employer_percentage=parse_percentage_input(etf_employer_percentage, 3.0),
+        nic=(nic or "").strip() or None,
+        epf_member_no=(epf_member_no or "").strip() or None
     )
     db.add(user)
     db.commit()
@@ -302,6 +312,8 @@ async def update_user(
     epf_employee_percentage: str = Form("8"),
     epf_employer_percentage: str = Form("12"),
     etf_employer_percentage: str = Form("3"),
+    nic: str = Form(""),
+    epf_member_no: str = Form(""),
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
@@ -317,6 +329,8 @@ async def update_user(
     user.epf_employee_percentage = parse_percentage_input(epf_employee_percentage, 8.0)
     user.epf_employer_percentage = parse_percentage_input(epf_employer_percentage, 12.0)
     user.etf_employer_percentage = parse_percentage_input(etf_employer_percentage, 3.0)
+    user.nic = (nic or "").strip() or None
+    user.epf_member_no = (epf_member_no or "").strip() or None
 
     try:
         db.commit()
@@ -1187,15 +1201,49 @@ async def generate_epf_pdf(
             1
         ).strftime("%B %Y")
 
-        context["epf_salary_data"] = [
+        eligible = [
             data for data in context["salary_data"]
             if (
                 'Monthly' in data["user"].paytype
-                and data["adjusted_basic"] == 0
                 and data["epf_etf_percentage"] > 0
                 and data["balance"] != 0
             )
         ]
+
+        form_c_rows = []
+        for data in eligible:
+            employee = data["epf_from_employee"]
+            employer = data["epf_from_employer"]
+            # Form C "Total Earnings" is the wage on which EPF is calculated —
+            # the same base used to derive employee/employer shares.
+            if data["adjusted_basic"] == 0:
+                earnings = data["salary_base_amount"]
+            else:
+                earnings = (data["adjusted_basic"] + data["total_salary"]) * (data["epf_etf_percentage"] / 100.0)
+            form_c_rows.append({
+                "user": data["user"],
+                "epf_from_employee": employee,
+                "epf_from_employer": employer,
+                "contribution_total": employee + employer,
+                "total_earnings": earnings,
+            })
+
+        employee_total = sum(r["epf_from_employee"] for r in form_c_rows)
+        employer_total = sum(r["epf_from_employer"] for r in form_c_rows)
+        earnings_total = sum(r["total_earnings"] for r in form_c_rows)
+        contribution_total = employee_total + employer_total
+
+        context["form_c_rows"] = form_c_rows
+        context["form_c_totals"] = {
+            "employee_total": employee_total,
+            "employer_total": employer_total,
+            "contribution_total": contribution_total,
+            "earnings_total": earnings_total,
+            "surcharges": 0.0,
+            "remittance": contribution_total,
+        }
+        context["epf_registration_no"] = ""
+        context["employer_name"] = "PANSALKANDA WATHTHA"
 
         html_content = templates.get_template("salary_pdf_epf.html").render(context)
 
@@ -1212,7 +1260,7 @@ async def generate_epf_pdf(
             await page.goto(f'file://{os.path.abspath(temp_html_path)}', wait_until='networkidle')
             pdf_content = await page.pdf(
                 format='A4',
-                landscape=True,
+                landscape=False,
                 print_background=True,
                 margin={'top': '8mm', 'right': '8mm', 'bottom': '8mm', 'left': '8mm'}
             )
@@ -1223,7 +1271,7 @@ async def generate_epf_pdf(
             media_type="application/pdf",
             headers={
                 "Content-Disposition": (
-                    f"attachment; filename=epf_labour_report_"
+                    f"attachment; filename=epf_form_c_"
                     f"{context['selected_year']}_{context['selected_month']}.pdf"
                 )
             }
