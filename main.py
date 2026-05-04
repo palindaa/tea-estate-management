@@ -1314,6 +1314,99 @@ async def generate_epf_pdf(
         except Exception as e:
             print(f"File cleanup error: {str(e)}")
 
+
+@app.get("/generate-manager-pdf")
+async def generate_manager_pdf(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    price_per_kg: float = 48.214,
+    current_user: AdminUser = Depends(get_current_user)
+):
+    temp_html_path = None
+
+    try:
+        salary_report_data = await salary_report(
+            request=request,
+            db=db,
+            year=year,
+            month=month,
+            price_per_kg=price_per_kg,
+            current_user=current_user
+        )
+        context = salary_report_data.context
+        context["month_label"] = date(
+            context["selected_year"],
+            context["selected_month"],
+            1
+        ).strftime("%B %Y")
+
+        manager_rows = []
+        for data in context["salary_data"]:
+            user = data["user"]
+            if not getattr(user, "is_manager", 0):
+                continue
+            if 'Monthly' not in (user.paytype or ""):
+                continue
+            pct = data["epf_etf_percentage"] or 0.0
+            basic = data["adjusted_basic"] or 0.0
+            basic_part = basic * (pct / 100.0)
+            allowance_part = basic - basic_part
+            manager_rows.append({
+                "user": user,
+                "basic_salary_part": basic_part,
+                "allowance_part": allowance_part,
+                "advance": data["advance"],
+                "epf_from_employee": data["epf_from_employee"],
+            })
+
+        context["manager_salary_data"] = manager_rows
+
+        html_content = templates.get_template("salary_pdf_manager.html").render(context)
+
+        temp_dir = "temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_html_path = os.path.join(temp_dir, "temp_salary_manager.html")
+
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(f'file://{os.path.abspath(temp_html_path)}', wait_until='networkidle')
+            pdf_content = await page.pdf(
+                format='A4',
+                print_background=True,
+                margin={'top': '0', 'right': '0', 'bottom': '0', 'left': '0'}
+            )
+            await browser.close()
+
+        return StreamingResponse(
+            io.BytesIO(pdf_content),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=manager_salary_"
+                    f"{context['selected_year']}_{context['selected_month']}.pdf"
+                )
+            }
+        )
+
+    except Exception as e:
+        error_message = f"Manager PDF generation failed: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+    finally:
+        try:
+            if temp_html_path and os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+        except Exception as e:
+            print(f"File cleanup error: {str(e)}")
+
+
 @app.get("/daily-tea")
 async def daily_tea_report(
     request: Request,
