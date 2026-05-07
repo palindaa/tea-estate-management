@@ -1315,6 +1315,108 @@ async def generate_epf_pdf(
             print(f"File cleanup error: {str(e)}")
 
 
+@app.get("/generate-etf-pdf")
+async def generate_etf_pdf(
+    request: Request,
+    db: Session = Depends(get_db),
+    year: int = None,
+    month: int = None,
+    price_per_kg: float = 48.214,
+    current_user: AdminUser = Depends(get_current_user)
+):
+    temp_html_path = None
+
+    try:
+        salary_report_data = await salary_report(
+            request=request,
+            db=db,
+            year=year,
+            month=month,
+            price_per_kg=price_per_kg,
+            current_user=current_user
+        )
+        context = salary_report_data.context
+        context["month_label"] = date(
+            context["selected_year"],
+            context["selected_month"],
+            1
+        ).strftime("%B %Y")
+
+        etf_rows = []
+        for data in context["salary_data"]:
+            user = data["user"]
+            if 'Monthly' not in (user.paytype or ""):
+                continue
+            if (data["epf_etf_percentage"] or 0) <= 0:
+                continue
+            if data["balance"] == 0:
+                continue
+            contribution = data["etf_from_employer"] or 0.0
+            if contribution <= 0:
+                continue
+            etf_rows.append({
+                "user": user,
+                "contribution": contribution,
+            })
+
+        contribution_total = sum(r["contribution"] for r in etf_rows)
+
+        context["etf_rows"] = etf_rows
+        context["etf_totals"] = {
+            "employee_count": len(etf_rows),
+            "contribution_total": contribution_total,
+            "net_contribution": contribution_total,
+            "cheque_return_charges": 0.0,
+            "remittance": contribution_total,
+        }
+        context["etf_employer_no"] = ""
+        context["employer_name"] = "PANSALKANDA WATHTHA"
+
+        html_content = templates.get_template("salary_pdf_etf.html").render(context)
+
+        temp_dir = "temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_html_path = os.path.join(temp_dir, "temp_salary_etf.html")
+
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(f'file://{os.path.abspath(temp_html_path)}', wait_until='networkidle')
+            pdf_content = await page.pdf(
+                format='A4',
+                landscape=False,
+                print_background=True,
+                margin={'top': '8mm', 'right': '8mm', 'bottom': '8mm', 'left': '8mm'}
+            )
+            await browser.close()
+
+        return StreamingResponse(
+            io.BytesIO(pdf_content),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=etf_form_r4_"
+                    f"{context['selected_year']}_{context['selected_month']}.pdf"
+                )
+            }
+        )
+
+    except Exception as e:
+        error_message = f"ETF PDF generation failed: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+    finally:
+        try:
+            if temp_html_path and os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+        except Exception as e:
+            print(f"File cleanup error: {str(e)}")
+
+
 @app.get("/generate-manager-pdf")
 async def generate_manager_pdf(
     request: Request,
